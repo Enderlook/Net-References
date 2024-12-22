@@ -1,0 +1,74 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net5;net6;net7;net8;net9</TargetFrameworks>
+    <OutputType>Library</OutputType>
+    <PackageId>Enderlook.InnerRef</PackageId>
+    <AssemblyName>Enderlook.InnerRef</AssemblyName>
+    <RootNamespace>Enderlook.InnerRef</RootNamespace>
+    <Authors>Enderlook</Authors>
+    <Product>Enderlook.InnerRef</Product>
+    <RepositoryUrl>https://github.com/Enderlook/Net-InnerRef</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Version>0.1.0</Version>
+    <LangVersion>13</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsTrimmable>true</IsTrimmable>
+    <TrimmerDefaultAction>link</TrimmerDefaultAction>
+    <TrimMode>full</TrimMode>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' Or '$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Memory" Version="4.5.4" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="4.5.3" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+	<Reference Include="_">
+      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\netstandard2.0\Enderlook.InnerRef.ILHelpers.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+	<Reference Include="_">
+      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\netstandard2.1\Enderlook.InnerRef.ILHelpers.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net5'">
+	<Reference Include="_">
+      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net5\Enderlook.InnerRef.ILHelpers.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net6'">
+	<Reference Include="_">
+      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net6\Enderlook.InnerRef.ILHelpers.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net7'">
+	<Reference Include="_">
+      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net7\Enderlook.InnerRef.ILHelpers.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8'">
+	<Reference Include="_">
+      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net8\Enderlook.InnerRef.ILHelpers.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9'">
+	<Reference Include="_">
+      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net9\Enderlook.InnerRef.ILHelpers.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Enderlook.References.ILHelpers">
+      <HintPath>..\Enderlook.References.ILHelpers\bin\Release\netstandard2.0\Enderlook.References.ILHelpers.dll</HintPath>
+    </Reference>
+    <Reference Include="_">
+      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\netstandard2.0\Enderlook.InnerRef.ILHelpers.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+	
+</Project>
