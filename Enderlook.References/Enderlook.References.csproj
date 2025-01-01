@@ -26,49 +26,9 @@
     <PackageReference Include="System.Memory" Version="4.5.4" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="4.5.3" />
   </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-	<Reference Include="_">
-      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\netstandard2.0\Enderlook.InnerRef.ILHelpers.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
-	<Reference Include="_">
-      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\netstandard2.1\Enderlook.InnerRef.ILHelpers.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net5'">
-	<Reference Include="_">
-      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net5\Enderlook.InnerRef.ILHelpers.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net6'">
-	<Reference Include="_">
-      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net6\Enderlook.InnerRef.ILHelpers.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net7'">
-	<Reference Include="_">
-      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net7\Enderlook.InnerRef.ILHelpers.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8'">
-	<Reference Include="_">
-      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net8\Enderlook.InnerRef.ILHelpers.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9'">
-	<Reference Include="_">
-      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\net9\Enderlook.InnerRef.ILHelpers.dll</HintPath>
-    </Reference>
-  </ItemGroup>
+	
   <ItemGroup>
-    <Reference Include="Enderlook.References.ILHelpers">
-      <HintPath>..\Enderlook.References.ILHelpers\bin\Release\netstandard2.0\Enderlook.References.ILHelpers.dll</HintPath>
-    </Reference>
-    <Reference Include="_">
-      <HintPath>..\Enderlook.InnerRef.ILHelpers\bin\release\netstandard2.0\Enderlook.InnerRef.ILHelpers.dll</HintPath>
-    </Reference>
+    <ProjectReference Include="..\Enderlook.References.SourceGenerators\Enderlook.References.SourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 	
 </Project>
