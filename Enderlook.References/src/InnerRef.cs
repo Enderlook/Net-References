@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -9,11 +10,11 @@ namespace Enderlook.References;
 /// Represent an inner reference to an allocation.
 /// </summary>
 /// <typeparam name="T">Type of the inner reference.</typeparam>
-[DebuggerDisplay("{_owner} + {_offset}")]
 public readonly struct InnerRef<T>
 {
-    internal readonly object? _owner;
-    internal readonly nint _offset;
+    private readonly object? _owner;
+    private readonly nint _unmanaged;
+    private readonly object? _managed;
 
     /// <summary>
     /// Get reference to the value.
@@ -21,29 +22,75 @@ public readonly struct InnerRef<T>
     /// <exception cref="ArgumentException">Thrown when reference is backed by <see cref="IMemoryOwner{T}"/> and it changed its span's length to a lower one that the index of this reference.</exception>
     public readonly unsafe ref T Value
     {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
             object? owner = _owner;
-            nint offset = _offset;
-
+            nint unmanaged = _unmanaged;
             if (owner is null)
+                return ref Unsafe.AsRef<T>((void*)unmanaged);
+
+            object? managed = _managed;
+            switch (managed)
             {
-                return ref Unsafe.AsRef<T>((void*)offset);
+                case null when unmanaged >= 0:
+                {
+#if NET6_0_OR_GREATER
+                    Debug.Assert(owner is Array);
+                    Array array = Unsafe.As<Array>(owner);
+                    Debug.Assert(unmanaged < array.Length);
+                    return ref Unsafe.Add(ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array)), unmanaged);
+#else
+                    Debug.Assert(owner is T[]);
+                    T[] array = Unsafe.As<T[]>(owner);
+                    return ref array[(int)unmanaged];
+#endif
+                }
+                case null when unmanaged < 0:
+                {
+                    int index = (int)unmanaged & ~int.MinValue;
+                    Memory<T> memory;
+#if NET5_0_OR_GREATER
+                    scoped ref Memory<T> memoryRef = ref Unsafe.NullRef<Memory<T>>();
+#else
+                    scoped ref Memory<T> memoryRef = ref Unsafe.AsRef<Memory<T>>(null);
+#endif
+
+                    if (owner is IMemoryOwner<T> memoryOwner)
+                    {
+                        memory = memoryOwner.Memory;
+                        memoryRef = ref memory;
+                    }
+                    else
+                    {
+#if NET5_0_OR_GREATER
+                        memoryRef = ref Unsafe.Unbox<Memory<T>>(owner);
+#else
+                        memory = (Memory<T>)owner;
+                        memoryRef = ref memory;
+#endif
+                    }
+                    Span<T> span = memoryRef.Span;
+                    if (unmanaged >= span.Length) // Add in case memory returns a different span with another length.
+                        Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
+                    return ref Unsafe.Add(ref MemoryMarshal.GetReference(span), index);
+                }
+                case FieldInfo[] fieldInfo:
+                {
+                    TypedReference typedReference = TypedReference.MakeTypedReference(owner, fieldInfo);
+                    ref T field = ref __refvalue(typedReference, T);
+#pragma warning disable CS9082 // Local is returned by reference but was initialized to a value that cannot be returned by reference
+                    return ref field;
+#pragma warning restore CS9082 // Local is returned by reference but was initialized to a value that cannot be returned by reference
+                }
+#if !NET6_0_OR_GREATER
+                case int[] indexes:
+                    return ref Utils.GetReference<T>(owner, indexes);
+#endif
             }
 
-            if (offset >= 0)
-            {
-                return ref Unsafe.As<byte, T>(ref ObjectHelpers.GetFromInnerOffset(owner, offset));
-            }
-
-            Debug.Assert(owner is IMemoryOwner<T>);
-            Span<T> span = Unsafe.As<IMemoryOwner<T>>(owner).Memory.Span;
-            nint offset_ = offset & ~int.MinValue;
-            // Do the check again as implementors of `IMemoryOwner<T>` can lie and give us a different span.
-            if ((span.Length * Unsafe.SizeOf<T>()) < offset_)
-                Utils.ThrowArgumentException_IndexMustBeLowerThanIMemoryOwnerMemoryLength();
-            return ref Unsafe.AddByteOffset(ref MemoryMarshal.GetReference(span), offset_);
+            Debug.Assert(managed is ReferenceProvider<T>);
+            ReferenceProvider<T> referenceProvider = Unsafe.As<ReferenceProvider<T>>(managed);
+            return ref referenceProvider(owner, unmanaged);
         }
     }
 
@@ -59,7 +106,7 @@ public readonly struct InnerRef<T>
         if (pointer == null)
             Utils.ThrowArgumentNullException_Pointer();
         _owner = default;
-        _offset = (nint)pointer;
+        _unmanaged = (nint)pointer;
     }
 
     /// <summary>
@@ -80,7 +127,7 @@ public readonly struct InnerRef<T>
             Utils.ThrowArgumentException_IndexMustBeLowerThanIMemoryOwnerMemoryLength();
 
         _owner = memoryManager;
-        _offset = (index * Unsafe.SizeOf<T>()) | int.MinValue;
+        _unmanaged = index | int.MinValue;
     }
 
     /// <summary>
@@ -104,13 +151,7 @@ public readonly struct InnerRef<T>
             Utils.ThrowArrayTypeMismatchException_Segment();
 
         _owner = array;
-#if NET5_0_OR_GREATER
-        ref byte element = ref Unsafe.As<T, byte>(ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), index));
-        Debug.Assert(Unsafe.AreSame(ref element, ref Unsafe.As<T, byte>(ref array[index])));
-#else
-        ref byte element = ref Unsafe.As<T, byte>(ref array[index]);
-#endif
-        _offset = ObjectHelpers.CalculateInnerOffset(array, ref element);
+        _unmanaged = index;
     }
 
     /// <summary>
@@ -129,35 +170,8 @@ public readonly struct InnerRef<T>
         if (index > memory.Length)
             Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
 
-        ref RawMemory raw = ref Unsafe.As<Memory<T>, RawMemory>(ref memory);
-        int index_ = (raw._index & ~int.MinValue) + index;
-        switch (raw._object)
-        {
-            case T[] array:
-            {
-                _owner = array;
-#if NET5_0_OR_GREATER
-                ref byte element = ref Unsafe.As<T, byte>(ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), index_));
-                Debug.Assert(Unsafe.AreSame(ref element, ref Unsafe.As<T, byte>(ref array[index_])));
-#else
-                ref byte element = ref Unsafe.As<T, byte>(ref array[index_]);
-#endif
-                _offset = ObjectHelpers.CalculateInnerOffset(array, ref element);
-                break;
-            }
-            case IMemoryOwner<T> memoryManager:
-            {
-                _owner = memoryManager;
-                _offset = (index_ * Unsafe.SizeOf<T>()) | int.MinValue;
-                break;
-            }
-            default:
-            {
-                _owner = new MemoryWrapper<T>(memory);
-                _offset = (index * Unsafe.SizeOf<T>()) | int.MinValue;
-                break;
-            }
-        }
+        _owner = new MemoryWrapper<T>(memory);
+        _unmanaged = index | int.MinValue;
     }
 
     /// <summary>
@@ -180,15 +194,7 @@ public readonly struct InnerRef<T>
             Utils.ThrowArrayTypeMismatchException_Segment();
 
         _owner = segment.Array;
-
-        index += segment.Offset;
-#if NET5_0_OR_GREATER
-        ref byte element = ref Unsafe.As<T, byte>(ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(segment.Array), index));
-        Debug.Assert(Unsafe.AreSame(ref element, ref Unsafe.As<T, byte>(ref segment.Array[index])));
-#else
-        ref byte element = ref Unsafe.As<T, byte>(ref segment.Array[index]);
-#endif
-        _offset = ObjectHelpers.CalculateInnerOffset(segment.Array, ref element);
+        _unmanaged = index + segment.Offset;
     }
 
     /// <summary>
@@ -208,7 +214,12 @@ public readonly struct InnerRef<T>
             Utils.ThrowArrayTypeMismatchException_Segment();
 
         _owner = array;
-        _offset = ObjectHelpers.CalculateInnerOffset(array, ref Utils.GetReference(array, index1, index2));
+#if NET6_0_OR_GREATER
+        _unmanaged = Utils.CalculateIndex(array, [index1, index2]);
+#else
+        Utils.CheckBounds(array, [index1, index2]);
+        _managed = new int[] { index1, index2 };
+#endif
     }
 
     /// <summary>
@@ -230,7 +241,12 @@ public readonly struct InnerRef<T>
             Utils.ThrowArrayTypeMismatchException_Segment();
 
         _owner = array;
-        _offset = ObjectHelpers.CalculateInnerOffset(array, ref Utils.GetReference(array, index1, index2, index3));
+#if NET6_0_OR_GREATER
+        _unmanaged = Utils.CalculateIndex(array, [index1, index2, index3]);
+#else
+        Utils.CheckBounds(array, [index1, index2, index3]);
+        _managed = new int[] { index1, index2, index3 };
+#endif
     }
 
     /// <summary>
@@ -252,7 +268,12 @@ public readonly struct InnerRef<T>
             Utils.ThrowArrayTypeMismatchException_Segment();
 
         _owner = array;
-        _offset = ObjectHelpers.CalculateInnerOffset(array, ref Utils.GetReference(array, index1, index2, index3, index4));
+#if NET6_0_OR_GREATER
+        _unmanaged = Utils.CalculateIndex(array, [index1, index2, index3, index4]);
+#else
+        Utils.CheckBounds(array, [index1, index2, index3, index4]);
+        _managed = new int[] { index1, index2, index3, index4 };
+#endif
     }
 
     /// <summary>
@@ -287,116 +308,68 @@ public readonly struct InnerRef<T>
             if (index > array_.Length)
                 Utils.ThrowArgumentException_ArrayIndexesOutOfBounds();
 
-#if NET5_0_OR_GREATER
-            ref byte element = ref Unsafe.As<T, byte>(ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array_), index));
-            Debug.Assert(Unsafe.AreSame(ref element, ref Unsafe.As<T, byte>(ref array_[index])));
-#else
-            ref byte element = ref Unsafe.As<T, byte>(ref array_[index]);
-#endif
-            _offset = ObjectHelpers.CalculateInnerOffset(array, ref element);
+            _unmanaged = index;
         }
         else
 #endif
         {
             if (arrayType.GetArrayRank() != indexes.Length)
                 Utils.ThrowArgumentException_ArrayIndexesLengthDoesNotMatchRank();
-            switch (indexes.Length)
-            {
-#if !(NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER)
-                case 1 when arrayType == typeof(T).MakeArrayType():
-                {                    
-                    Debug.Assert(array is T[]);
-                    T[] array_ = Unsafe.As<T[]>(array);
 
-                    int index = indexes[0];
-                    if (index < 0)
-                        Utils.ThrowArgumentOutOfRangeException_IndexesCanNotBeNegative();
-                    if (index > array_.Length)
-                        Utils.ThrowArgumentException_ArrayIndexesOutOfBounds();
-                
-#if NET5_0_OR_GREATER
-                    ref byte element = ref Unsafe.As<T, byte>(ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array_), index));
-                    Debug.Assert(Unsafe.AreSame(ref element, ref Unsafe.As<T, byte>(ref array_[index])));
+#if !(NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER)
+            if (indexes.Length == 1)
+            {      
+                Debug.Assert(array is T[]);
+                T[] array_ = Unsafe.As<T[]>(array);
+
+                int index = indexes[0];
+                if (index < 0)
+                    Utils.ThrowArgumentOutOfRangeException_IndexesCanNotBeNegative();
+                if (index > array_.Length)
+                    Utils.ThrowArgumentException_ArrayIndexesOutOfBounds();
+
+                _unmanaged = index;
+                return;
+            }
+            else
+#endif
+            {
+#if NET6_0_OR_GREATER
+                _unmanaged = Utils.CalculateIndex(array, indexes);
 #else
-                    ref byte element = ref Unsafe.As<T, byte>(ref array_[index]);
+                Utils.CheckBounds(array, indexes);
+                _managed = indexes.ToArray();
 #endif
-                    _offset = ObjectHelpers.CalculateInnerOffset(array, ref element);
-                    break;
-                }
-#endif
-                case 2:
-                {
-                    Debug.Assert(array is T[,]);
-                    ref int index_ = ref MemoryMarshal.GetReference(indexes);
-                    _offset = ObjectHelpers.CalculateInnerOffset(array, ref Utils.GetReference(
-                        Unsafe.As<T[,]>(array),
-                        index_,
-                        Unsafe.Add(ref index_, 1)
-                        )
-                    );
-                    break;
-                }
-                case 3:
-                {
-                    Debug.Assert(array is T[,,]);
-                    ref int index_ = ref MemoryMarshal.GetReference(indexes);
-                    _offset = ObjectHelpers.CalculateInnerOffset(array, ref Utils.GetReference(
-                        Unsafe.As<T[,,]>(array),
-                        index_,
-                        Unsafe.Add(ref index_, 1),
-                        Unsafe.Add(ref index_, 2)
-                        )
-                    );
-                    break;
-                }
-                case 4:
-                {
-                    Debug.Assert(array is T[,,,]);
-                    ref int index_ = ref MemoryMarshal.GetReference(indexes);
-                    _offset = ObjectHelpers.CalculateInnerOffset(array, ref Utils.GetReference(
-                        Unsafe.As<T[,,,]>(array),
-                        index_,
-                        Unsafe.Add(ref index_, 1),
-                        Unsafe.Add(ref index_, 2),
-                        Unsafe.Add(ref index_, 3)
-                        )
-                    );
-                    break;
-                }
-                default:
-                {
-                    int index = Utils.CalculateIndex(array, indexes);
-#if NET9_0_OR_GREATER
-                    ref byte element = ref Unsafe.AddByteOffset(
-                        ref MemoryMarshal.GetArrayDataReference(array),
-                        RuntimeHelpers.SizeOf(typeof(T).TypeHandle) * index
-                    );
-                    _offset = ObjectHelpers.CalculateInnerOffset(array, ref element);
-#else
-                    GCHandle handle = default;
-                    try
-                    {
-                        handle = GCHandle.Alloc(array, GCHandleType.Pinned);
-                        ref byte element = ref Unsafe.AsRef<byte>((byte*)Marshal.UnsafeAddrOfPinnedArrayElement(array, index));
-                        _offset = ObjectHelpers.CalculateInnerOffset(array, ref element);
-                    }
-                    finally
-                    {
-                        if (handle.IsAllocated)
-                            handle.Free();
-                    }
-#endif
-                    break;
-                }
             }
         }
     }
 
-    internal InnerRef(object? owner, nint offset)
+    /// <summary>
+    /// Creates a wrapper around a method which returns a reference.
+    /// </summary>
+    /// <param name="managedState">Managed state to pass to the delegate.</param>
+    /// <param name="unmanagedState">Unmanaged state to pass to the delegate.</param>
+    /// <param name="referenceProvider">Delegate which wraps the method that produces a reference.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="referenceProvider"/> is <see langword="null"/>.</exception>
+    public InnerRef(object managedState, nint unmanagedState, ReferenceProvider<T> referenceProvider)
+    {
+        if (referenceProvider is null) Utils.ThrowArgumentNullException_ReferenceProvider();
+
+        _managed = managedState;
+        _unmanaged = unmanagedState;
+        _owner = referenceProvider;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal InnerRef(object? owner, nint unmanaged, object? managed)
     {
         _owner = owner;
-        _offset = offset;
+        _unmanaged = unmanaged;
+        _managed = managed;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static InnerRef<T> CreateUnsafe(object? owner, nint unmanaged, object? managed) => new(owner, unmanaged, managed);
 
     /// <summary>
     /// Reads the inner reference.

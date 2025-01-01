@@ -20,11 +20,11 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
     internal readonly object? _payload;
     private readonly int _index;
 
-    private bool _calculatedOffset;
-    private nint _offset;
+    private bool _referenceCached;
+    private object? _referencePayload;
 
-    internal bool _calculatedOffsetValueType;
-    internal nint _offsetValueType;
+    private bool _valueCached;
+    private RefFuncRef<TOwner, TReference> _valuePayload;
 
     internal InnerOffset(Mode mode, object? payload, int index)
     {
@@ -442,22 +442,20 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
     /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="TOwner"/> is not a value type.</exception>
     /// <exception cref="ArgumentException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/> is <see langword="null"/>, or is an offset from a <see cref="ArraySegment{T}"/> or <see cref="Memory{T}"/> and index is out of range.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/>'s <see cref="Type.GetElementType()"/> is not <typeparamref name="TReference"/>.</exception>
-    public ref TReference FromRef(ref TOwner owner)
+    public unsafe ref TReference FromRef(ref TOwner owner)
     {
         if (!typeof(TOwner).IsValueType) Utils.ThrowInvalidOperationException_InvalidTReferenceTypeOnlyValueTypes();
         switch (_mode)
         {
             case Mode.FieldInfo:
             {
-                if (_calculatedOffsetValueType)
-                    return ref Unsafe.AddByteOffset(ref Unsafe.As<TOwner, TReference>(ref owner), _offsetValueType);
-                else
+                if (!_valueCached)
                 {
                     Debug.Assert(_payload is FieldInfo);
-                    nint offset = _offsetValueType = FromFieldValue(ref owner, Unsafe.As<FieldInfo>(_payload));
-                    _calculatedOffsetValueType = true;
-                    return ref Unsafe.AddByteOffset(ref Unsafe.As<TOwner, TReference>(ref owner), offset);
+                    FromFieldValue(Unsafe.As<FieldInfo>(_payload));
+                    _valueCached = true;
                 }
+                return ref _valuePayload(ref owner);
             }
             case Mode.ArraySegment:
             {
@@ -470,43 +468,24 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
                 int index = _index;
                 if (index >= arraySegment.Count)
                     Utils.ThrowArgumentException_OwnerCountMustBeGreaterThanIndex();
-                nint baseOffset = Unsafe.SizeOf<TReference>() * arraySegment.Offset;
-                if (_calculatedOffset)
-                {
-                    Debug.Assert(_offset + baseOffset == FromArray(arraySegment.Array, index + arraySegment.Offset));
+
 #if NET5_0_OR_GREATER
-                    ref TReference element = ref Unsafe.As<byte, TReference>(ref ObjectHelpers.GetFromInnerOffset(arraySegment.Array, _offset + baseOffset));
-                    Debug.Assert(Unsafe.AreSame(ref element, ref arraySegment.Array[_index + arraySegment.Offset]));
-                    return ref element;
+                return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(arraySegment.Array), arraySegment.Offset + index);
 #else
-                    return ref arraySegment.Array[index + arraySegment.Offset];
+                return ref arraySegment.Array[arraySegment.Offset + index];
 #endif
-                }
-                else
-                {
-                    nint offset = _offset = FromArray(arraySegment.Array, index);
-                    _calculatedOffset = true;
-                    Debug.Assert(offset + baseOffset == FromArray(arraySegment.Array, index + arraySegment.Offset));
-#if NET5_0_OR_GREATER
-                    ref TReference element = ref Unsafe.As<byte, TReference>(ref ObjectHelpers.GetFromInnerOffset(arraySegment.Array, _offset + baseOffset));
-                    Debug.Assert(Unsafe.AreSame(ref element, ref arraySegment.Array[_index + baseOffset]));
-                    return ref element;
-#else
-                    return ref arraySegment.Array[index + arraySegment.Offset];
-#endif
-                }
             }
             case Mode.Memory:
             {
                 Debug.Assert(typeof(TOwner) == typeof(Memory<TReference>));
                 ref Memory<TReference> memory = ref Unsafe.As<TOwner, Memory<TReference>>(ref owner);
-                return ref FromSpan(memory.Span);
+                return ref FromMemory(ref memory);
             }
             case Mode.IMemoryOwner:
             {
                 int index = _index;
-                Span<TReference> span = ((IMemoryOwner<TReference>)owner).Memory.Span;
-                return ref FromSpan(span);
+                Memory<TReference> memory = ((IMemoryOwner<TReference>)owner).Memory;
+                return ref FromMemory(ref memory);
             }
 #if NET8_0_OR_GREATER
             case Mode.InlineArray:
@@ -522,10 +501,7 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
 #if NET5_0_OR_GREATER
                 return ref Unsafe.NullRef<TReference>();
 #else
-                unsafe
-                {
-                    return ref Unsafe.AsRef<TReference>(null);
-                }
+                return ref Unsafe.AsRef<TReference>(null);
 #endif
             }
         }
@@ -539,15 +515,12 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
         {
             case Mode.FieldInfo:
             {
-                if (_calculatedOffset)
-                    return new(owner, _offset);
-                else
+                if (!_referenceCached)
                 {
-                    Debug.Assert(_payload is FieldInfo);
-                    nint offset = _offset = FromField(owner, Unsafe.As<FieldInfo>(_payload));
-                    _calculatedOffset = true;
-                    return new(owner, offset);
+                    FromField(owner, Unsafe.As<FieldInfo>(_payload));
+                    _referenceCached = true;
                 }
+                return InnerRef<TReference>.CreateUnsafe(owner, default, _referencePayload);
             }
             case Mode.SingleZeroArray:
             {
@@ -558,15 +531,7 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
                 int index = _index;
                 if (index >= array.Length)
                     Utils.ThrowArgumentException_OwnerLengthMustBeGreaterThanIndex();
-
-                if (_calculatedOffset)
-                    return new(owner, _offset);
-                else
-                {
-                    nint offset = _offset = FromArray(array, index);
-                    _calculatedOffset = true;
-                    return new(owner, offset);
-                }
+                return InnerRef<TReference>.CreateUnsafe(owner, index, default);
             }
             case Mode.ArraySegment:
             {
@@ -586,19 +551,7 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
                 int index = _index;
                 if (index >= arraySegment.Count)
                     Utils.ThrowArgumentException_OwnerCountMustBeGreaterThanIndex();
-                nint baseOffset = Unsafe.SizeOf<TReference>() * arraySegment.Offset;
-                if (_calculatedOffset)
-                {
-                    Debug.Assert(_offset + baseOffset == FromArray(arraySegment.Array, index + arraySegment.Offset));
-                    return new(arraySegment.Array, _offset + baseOffset);
-                }
-                else
-                {
-                    nint offset = _offset = FromArray(arraySegment.Array, index);
-                    _calculatedOffset = true;
-                    Debug.Assert(offset + baseOffset == FromArray(arraySegment.Array, index + arraySegment.Offset));
-                    return new(arraySegment.Array, offset + baseOffset);
-                }
+                return InnerRef<TReference>.CreateUnsafe(arraySegment.Array, index + arraySegment.Offset, default);
             }
             case Mode.Memory:
             {
@@ -606,12 +559,24 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
                 if (typeof(T).IsValueType)
                 {
                     Debug.Assert(typeof(T) == typeof(Memory<TReference>));
-                    return FromMemory(ref Unsafe.As<T, RawMemory>(ref owner));
+                    ref Memory<TReference> memory = ref Unsafe.As<T, Memory<TReference>>(ref owner);
+                    int index = _index;
+                    if (index >= memory.Length)
+                        Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
+                    return InnerRef<TReference>.CreateUnsafe(new MemoryWrapper<TReference>(memory), index | int.MinValue, default);
                 }
                 else
                 {
-                    TOwner memory = (TOwner)(object)owner;
-                    return FromMemory(ref Unsafe.As<TOwner, RawMemory>(ref memory));
+                    Debug.Assert(owner is Memory<TReference>);
+#if NET5_0_OR_GREATER
+                    ref Memory<TReference> memory = ref Unsafe.Unbox<Memory<TReference>>(owner);
+#else
+                    Memory<TReference> memory = (Memory<TReference>)(object)owner;
+#endif
+                    int index = _index;
+                    if (index >= memory.Length)
+                        Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
+                    return InnerRef<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
                 }
             }
             case Mode.IMemoryOwner:
@@ -619,29 +584,19 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
                 int index = _index;
                 if (index >= (typeof(T).IsValueType ? ((IMemoryOwner<TReference>)owner).Memory : Unsafe.As<IMemoryOwner<TReference>>(owner).Memory).Length)
                     Utils.ThrowArgumentException_OwnerSpanLengthMustBeGreaterThanIndex();
-
-                if (_calculatedOffset)
-                    return new(owner, _offset);
-                else
-                {
-                    nint offset = _offset = (index * Unsafe.SizeOf<TReference>()) | int.MinValue;
-                    _calculatedOffset = true;
-                    return new(owner, offset);
-                }
+                return InnerRef<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
             }
 #if NET8_0_OR_GREATER
             case Mode.InlineArray:
             {
                 Debug.Assert(typeof(TOwner).IsDefined(typeof(InlineArrayAttribute)));
                 Debug.Assert(_index < typeof(TOwner).GetCustomAttribute<InlineArrayAttribute>()!.Length);
-                if (_calculatedOffset)
-                    return new(owner, _offset);
-                else
+                if (!_referenceCached)
                 {
-                    nint offset = _offset = MakeOffset(owner, ref Unsafe.Add(ref Unsafe.As<TOwner, TReference>(ref UnboxerHelper<TOwner>.Unbox(owner)), _index));
-                    _calculatedOffset = true;
-                    return new(owner, _offset);
+                    _referencePayload = UnboxerHelper<TOwner>.GetElementAccessor<TReference>();
+                    _referenceCached = true;
                 }
+                return InnerRef<TReference>.CreateUnsafe(owner, _index, _referencePayload);
             }
 #endif
             case Mode.SingleArray:
@@ -675,216 +630,89 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
         return default;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private unsafe static nint MakeOffset(object owner, ref TReference field)
-    {
-        Debug.Assert(owner is not null);
-        return ObjectHelpers.CalculateInnerOffset(owner, ref Unsafe.As<TReference, byte>(ref field));
-    }
-
-    private nint FromField<T>(T owner, FieldInfo fieldInfo)
+    private void FromField<T>(T owner, FieldInfo fieldInfo)
     {
         Debug.Assert(owner is not null);
 #if !NET10_0_OR_GREATER
         if (!typeof(TReference).IsPrimitive)
 #endif
         {
-#if !NETSTANDARD2_0
             try
-#endif
             {
                 object boxed = owner;
                 Debug.Assert(boxed is not null);
-                TypedReference typedReference = TypedReference.MakeTypedReference(boxed, [fieldInfo]);
+                FieldInfo[] array = [fieldInfo];
+                TypedReference typedReference = TypedReference.MakeTypedReference(boxed, array);
                 ref TReference field = ref __refvalue(typedReference, TReference);
-                return MakeOffset(boxed, ref field);
+                _referencePayload = array;
+                return;
             }
-#if !NETSTANDARD2_0
             catch (NotImplementedException)
             {
                 // The runtime doesn't have support for varargs stuff.
             }
-#endif
         }
 
-#if !NETSTANDARD2_0
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
         if (typeof(TOwner).IsValueType)
         {
-            DynamicMethod dynamicMethod = new("GetFieldRef", typeof(TReference).MakeByRefType(), [typeof(object)]);
+            DynamicMethod dynamicMethod = new("GetFieldRef", typeof(TReference).MakeByRefType(), [typeof(object), typeof(nint)]);
             ILGenerator ilGenerator = dynamicMethod.GetILGenerator();
             ilGenerator.Emit(OpCodes.Ldarg_0);
             ilGenerator.Emit(OpCodes.Unbox, typeof(TOwner));
             ilGenerator.Emit(OpCodes.Ldflda, fieldInfo);
             ilGenerator.Emit(OpCodes.Ret);
 #if NET5_0_OR_GREATER
-            FuncRef<object, TReference> @delegate = dynamicMethod.CreateDelegate<FuncRef<object, TReference>>();
+            _referencePayload = dynamicMethod.CreateDelegate<ReferenceProvider<TReference>>();
 #else
-            FuncRef<object, TReference> @delegate = (FuncRef<object, TReference>)dynamicMethod.CreateDelegate(typeof(FuncRef<object, TReference>));
+            _referencePayload = dynamicMethod.CreateDelegate(typeof(ReferenceProvider<TReference>));
 #endif
-            return MakeOffset(owner, ref @delegate(owner));
         }
         else
         {
-            DynamicMethod dynamicMethod = new("GetFieldRef", typeof(TReference).MakeByRefType(), [typeof(TOwner)]);
+            DynamicMethod dynamicMethod = new("GetFieldRef", typeof(TReference).MakeByRefType(), [typeof(object), typeof(nint)]);
             ILGenerator ilGenerator = dynamicMethod.GetILGenerator();
             ilGenerator.Emit(OpCodes.Ldarg_0);
+            ilGenerator.Emit(OpCodes.Call, Utils.UnsafeAsMethod.MakeGenericMethod([typeof(TOwner)]));
             ilGenerator.Emit(OpCodes.Ldflda, fieldInfo);
             ilGenerator.Emit(OpCodes.Ret);
 #if NET5_0_OR_GREATER
-            FuncRef<TOwner, TReference> @delegate = dynamicMethod.CreateDelegate<FuncRef<TOwner, TReference>>();
+            _referencePayload = dynamicMethod.CreateDelegate<ReferenceProvider<TReference>>();
 #else
-            FuncRef<TOwner, TReference> @delegate = (FuncRef<TOwner, TReference>)dynamicMethod.CreateDelegate(typeof(FuncRef<TOwner, TReference>));
+            _referencePayload = dynamicMethod.CreateDelegate(typeof(ReferenceProvider<TReference>));
 #endif
-
-            Debug.Assert(typeof(T) == typeof(TOwner));
-            return MakeOffset(owner, ref @delegate(Unsafe.As<T, TOwner>(ref owner)));
         }
+        return;
 #endif
         Utils.ThrowNotImplementedException();
-        return default;
     }
 
-    private static nint FromFieldValue(ref TOwner owner, FieldInfo fieldInfo)
+    private void FromFieldValue(FieldInfo fieldInfo)
     {
         Debug.Assert(typeof(TOwner).IsValueType);
 
-        Debug.Assert(owner is not null);
-#if !NET10_0_OR_GREATER
-        if (!typeof(TReference).IsPrimitive)
-#endif
-        {
 #if !NETSTANDARD2_0
-            try
-#endif
-            {
-                object boxed = owner;
-                Debug.Assert(boxed is not null);
-                TypedReference typedReference = TypedReference.MakeTypedReference(boxed, [fieldInfo]);
-                ref TReference field = ref __refvalue(typedReference, TReference);
-                ref TOwner unboxed = ref UnboxerHelper<TOwner>.Unbox(owner);
-                return Unsafe.ByteOffset(ref Unsafe.As<TOwner, byte>(ref unboxed), ref Unsafe.As<TReference, byte>(ref field));
-            }
-#if !NETSTANDARD2_0
-            catch (NotImplementedException)
-            {
-                // The runtime doesn't have support for varargs stuff.
-            }
-#endif
-        }
-
-        {
-#if !NETSTANDARD2_0
-            DynamicMethod dynamicMethod = new("GetFieldRef", typeof(TReference).MakeByRefType(), [typeof(TOwner).MakeByRefType()]);
-            ILGenerator ilGenerator = dynamicMethod.GetILGenerator();
-            ilGenerator.Emit(OpCodes.Ldarg_0);
-            ilGenerator.Emit(OpCodes.Ldflda, fieldInfo);
-            ilGenerator.Emit(OpCodes.Ret);
+        DynamicMethod dynamicMethod = new("GetFieldRef", typeof(TReference).MakeByRefType(), [typeof(TOwner).MakeByRefType()]);
+        ILGenerator ilGenerator = dynamicMethod.GetILGenerator();
+        ilGenerator.Emit(OpCodes.Ldarg_0);
+        ilGenerator.Emit(OpCodes.Ldflda, fieldInfo);
+        ilGenerator.Emit(OpCodes.Ret);
 #if NET5_0_OR_GREATER
-            RefFuncRef<TOwner, TReference> @delegate = dynamicMethod.CreateDelegate<RefFuncRef<TOwner, TReference>>();
+        RefFuncRef<TOwner, TReference> @delegate = dynamicMethod.CreateDelegate<RefFuncRef<TOwner, TReference>>();
 #else
-            RefFuncRef<TOwner, TReference> @delegate = (RefFuncRef<TOwner, TReference>)dynamicMethod.CreateDelegate(typeof(RefFuncRef<TOwner, TReference>));
+        RefFuncRef<TOwner, TReference> @delegate = Unsafe.As<RefFuncRef<TOwner, TReference>>(dynamicMethod.CreateDelegate(typeof(RefFuncRef<TOwner, TReference>)));
 #endif
-            ref TReference field = ref @delegate(ref owner);
-            return Unsafe.ByteOffset(ref Unsafe.As<TOwner, byte>(ref owner), ref Unsafe.As<TReference, byte>(ref field));
-#endif
-            Utils.ThrowNotImplementedException();
-            return default;
-        }
-    }
-
-    private static unsafe nint FromArray(TReference[] owner, int index)
-    {
-#if NET5_0_OR_GREATER
-        ref TReference reference = ref Unsafe.Add(
-            ref MemoryMarshal.GetArrayDataReference(owner),
-            index
-        );
-#else
-        ref TReference reference = ref Unsafe.Add(
-            ref MemoryMarshal.GetReference((Span<TReference>)owner),
-            index
-        );
-#endif
-        return MakeOffset(owner, ref reference);
-    }
-
-    private static unsafe nint FromArray(object owner, int index)
-    {
-        Debug.Assert(owner is Array);
-        Array array = Unsafe.As<Array>(owner);
-
-        Debug.Assert(
-            typeof(TOwner) == typeof(ArraySegment<TReference>)
-            || (typeof(TOwner) != typeof(Array)
-                ? typeof(TOwner).GetElementType() == typeof(TReference)
-                : owner.GetType().GetElementType() == typeof(TReference))
-        );
-
-#if NET6_0_OR_GREATER
-        ref TReference reference = ref Unsafe.As<byte, TReference>(ref Unsafe.AddByteOffset(
-            ref MemoryMarshal.GetArrayDataReference(array),
-            (nint)Unsafe.SizeOf<TReference>() * index
-        ));
-        return MakeOffset(owner, ref reference);
-#else
-        GCHandle handle = default;
-        try
-        {
-            handle = GCHandle.Alloc(array, GCHandleType.Pinned);
-            return MakeOffset(owner, ref Unsafe.AsRef<TReference>((void*)Marshal.UnsafeAddrOfPinnedArrayElement(array, index)));
-        }
-        finally
-        {
-            if (handle.IsAllocated)
-                handle.Free();
-        }
-#endif
-    }
-
-    private unsafe InnerRef<TReference> FromMemory(ref RawMemory raw)
-    {
-        int index = _index;
-        if (raw._length < index)
-            Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
-
-        index = (raw._index & ~int.MinValue) + index;
-        switch (raw._object)
-        {
-            case TReference[] array:
-            {
-                if (_calculatedOffset)
-                {
-                    return new(array, _offset);
-                }
-
-#if NET5_0_OR_GREATER
-                ref byte element = ref Unsafe.As<TReference, byte>(ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), index));
-#else
-                ref byte element = ref Unsafe.As<TReference, byte>(ref array[index]);
+        _valuePayload = @delegate;
+        return;
 #endif
 
-                nint offset = _offset = ObjectHelpers.CalculateInnerOffset(array, ref element);
-                _calculatedOffset = true;
-                return new(array, offset);
-            }
-            case MemoryManager<TReference> memoryManager:
-            {
-                nint offset = (index * Unsafe.SizeOf<TReference>()) | int.MinValue;
-                return new(memoryManager, offset);
-            }
-            default:
-            {
-                MemoryWrapper<TReference> owner = new(Unsafe.As<RawMemory, Memory<TReference>>(ref raw));
-                nint offset = (index * Unsafe.SizeOf<TReference>()) | int.MinValue;
-                return new(owner, offset);
-            }
-        }
+        Utils.ThrowNotImplementedException();
     }
 
     private InnerRef<TReference> FromSingleArray(object owner, Type ownerType)
     {
         Debug.Assert(owner.GetType() == ownerType);
-        if (!typeof(TReference).IsValueType && ownerType.GetElementType() != typeof(TReference))
+        if (!typeof(TReference).IsValueType && ownerType.GetElementType()! != typeof(TReference))
             Utils.ThrowArrayTypeMismatchException_Array();
         Debug.Assert(owner is Array);
         Array array = Unsafe.As<Array>(owner);
@@ -892,9 +720,29 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
         int lowerBound = array.GetLowerBound(0);
         if (index < lowerBound || index > array.GetUpperBound(0))
             Utils.ThrowArgumentException_OwnerIndexOutOfBounds();
-        // Can't store the result because different instances can have different lower bounds, which would modify the offset.
-        nint offset = FromArray(owner, index - lowerBound);
-        return new(owner, offset);
+#if NET6_0_OR_GREATER
+        return InnerRef<TReference>.CreateUnsafe(owner, index - lowerBound, default);
+#elif NETSTANDARD2_1_OR_GREATER
+        if (_referenceCached)
+        {
+            DynamicMethod dynamicMethod = new(
+                "GetElementRef",
+                typeof(TReference).MakeByRefType(),
+                [typeof(object), typeof(nint)]
+            );
+            ILGenerator il = dynamicMethod.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, Utils.UnsafeAsMethod.MakeGenericMethod(ownerType));
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Call, ownerType.GetMethod("Address", [typeof(TReference)]));
+            _referencePayload = dynamicMethod.CreateDelegate(typeof(ReferenceProvider<TReference>));
+            _referenceCached = true;
+        }
+        return InnerRef<TReference>.CreateUnsafe(owner, index, _referencePayload);
+#else
+        return InnerRef<TReference>.CreateUnsafe(owner, index, NotSupported<TReference>.Impl);
+#endif
     }
 
     private static InnerRef<TReference> FromMultiArray(object owner, Type ownerType, int[] indexes)
@@ -904,18 +752,21 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
             Utils.ThrowArrayTypeMismatchException_Array();
         Debug.Assert(owner is Array);
         Array array = Unsafe.As<Array>(owner);
+#if NET6_0_OR_GREATER
         int index = Utils.CalculateIndex(array, indexes);
-        // Can't store the result because different instances can have different lower bounds, which would modify the offset.
-        nint offset = FromArray(owner, index);
-        return new(owner, offset);
+        return InnerRef<TReference>.CreateUnsafe(owner, index, default);
+#else
+        Utils.CheckBounds(array, indexes);
+        return InnerRef<TReference>.CreateUnsafe(owner, default, indexes);
+#endif
     }
 
-    private ref TReference FromSpan(Span<TReference> span)
+    private ref TReference FromMemory(scoped ref Memory<TReference> memory)
     {
         int index = _index;
-        if (span.Length < index)
+        if (memory.Length < index)
             Utils.ThrowArgumentException_IndexMustBeLowerThanIMemoryOwnerMemoryLength();
-        return ref Unsafe.Add(ref MemoryMarshal.GetReference(span), index);
+        return ref Unsafe.Add(ref MemoryMarshal.GetReference(memory.Span), index);
     }
 }
 

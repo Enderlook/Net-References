@@ -1,65 +1,216 @@
 ﻿using System.Buffers;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Enderlook.References;
 
-internal static class Utils
+internal static partial class Utils
 {
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe static ref byte GetReference<T>(T[,] array, int index1, int index2)
-    {
-        try
-        {
-            return ref Unsafe.As<T, byte>(ref array[index1, index2]);
-        }
-        catch (IndexOutOfRangeException exception)
-        {
-            ThrowArgumentException_IndexOutOfBounds(exception);
-#if NET5_0_OR_GREATER
-            return ref Unsafe.NullRef<byte>();
-#else
-            return ref Unsafe.AsRef<byte>(null);
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+    public static readonly MethodInfo UnsafeAsMethod = typeof(Unsafe)
+        .GetMethod(
+            nameof(Unsafe.As),
+            1,
+            BindingFlags.Public | BindingFlags.Static,
+            null,
+            [typeof(object)],
+            null
+        );
 #endif
-        }
 
+#if !NET6_0_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+    // This is used in platforms which doesn't have `MemoryMarshal.GetArrayDataReference(Array)`
+    // when the array is non-zero-based single-dimensional, or a multi-dimensional array with rank > 32.
+    private static readonly ConcurrentDictionary<Type, Delegate> ArrayAccess = new();
+    private static readonly Func<Type, Delegate> ArrayAccessCreator = static (
+#if NET5_0_OR_GREATER
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
+#endif
+    arrayType) =>
+    {
+        Type[] arrayTypeArray = [arrayType];
+        MethodInfo unsafeAsMethod = UnsafeAsMethod.MakeGenericMethod(arrayTypeArray);
+        MethodInfo unsafeAddMethod = typeof(Unsafe)
+            .GetMethod(
+                nameof(Unsafe.Add),
+                1,
+                BindingFlags.Public | BindingFlags.Static,
+                null,
+                [Type.MakeGenericMethodParameter(0).MakeByRefType(), typeof(int)],
+                null
+            )!.MakeGenericMethod(arrayTypeArray);
+
+        Type elementType = arrayType.GetElementType()!;
+        DynamicMethod dynamicMethod = new(
+            "GetElementRef",
+            elementType.MakeByRefType(),
+            [typeof(object), typeof(int).MakeByRefType()]
+        );
+        ILGenerator il = dynamicMethod.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, unsafeAsMethod);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldind_I4);
+
+        if (arrayType.IsSZArray)
+        {
+            il.Emit(OpCodes.Ldelema, elementType);
+        }
+        else
+        {
+            int rank = arrayType.GetArrayRank();
+
+            int i = 1;
+            if (i++ >= rank)
+                goto end;
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Call, unsafeAddMethod);
+            il.Emit(OpCodes.Ldind_I4);
+
+            if (i++ >= rank)
+                goto end;
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Call, unsafeAddMethod);
+            il.Emit(OpCodes.Ldind_I4);
+
+            if (i++ >= rank)
+                goto end;
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_3);
+            il.Emit(OpCodes.Call, unsafeAddMethod);
+            il.Emit(OpCodes.Ldind_I4);
+
+            if (i++ >= rank)
+                goto end;
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_4);
+            il.Emit(OpCodes.Call, unsafeAddMethod);
+            il.Emit(OpCodes.Ldind_I4);
+
+            if (i++ >= rank)
+                goto end;
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_5);
+            il.Emit(OpCodes.Call, unsafeAddMethod);
+            il.Emit(OpCodes.Ldind_I4);
+
+            if (i++ >= rank)
+                goto end;
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_6);
+            il.Emit(OpCodes.Call, unsafeAddMethod);
+            il.Emit(OpCodes.Ldind_I4);
+
+            if (i++ >= rank)
+                goto end;
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_7);
+            il.Emit(OpCodes.Call, unsafeAddMethod);
+            il.Emit(OpCodes.Ldind_I4);
+
+            if (i++ >= rank)
+                goto end;
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_8);
+            il.Emit(OpCodes.Call, unsafeAddMethod);
+            il.Emit(OpCodes.Ldind_I4);
+
+            if (i++ >= rank)
+                goto end;
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_S, i);
+            il.Emit(OpCodes.Call, unsafeAddMethod);
+            il.Emit(OpCodes.Ldind_I4);
+
+        end:
+            Type[] parameters = new Type[rank];
+            Array.Fill(parameters, typeof(int));
+            MethodInfo addressMethod = arrayType.GetMethod("Address", parameters)!;
+            il.Emit(OpCodes.Call, addressMethod);
+        }
+        il.Emit(OpCodes.Ret);
+
+        return dynamicMethod.CreateDelegate(typeof(FuncArray<>).MakeGenericType(elementType.MakeByRefType()));
+    };
+#endif
+
+    public unsafe static ref T GetReference<T>(object array, int[] indexes)
+    {
+        Debug.Assert(indexes.Length > 1);
+        // In theory, the ECMA only supports up to 32 dimensions, but we have a fallback just to be sure.
+        switch (indexes.Length)
+        {
+            case 2: return ref GetReference2<T>(array, indexes);
+            case 3: return ref GetReference3<T>(array, indexes);
+            case 4: return ref GetReference4<T>(array, indexes);
+            case 5: return ref GetReference5<T>(array, indexes);
+            case 6: return ref GetReference6<T>(array, indexes);
+            case 7: return ref GetReference7<T>(array, indexes);
+            case 8: return ref GetReference8<T>(array, indexes);
+            case 9: return ref GetReference9<T>(array, indexes);
+            case 10: return ref GetReference10<T>(array, indexes);
+            case 11: return ref GetReference11<T>(array, indexes);
+            case 12: return ref GetReference12<T>(array, indexes);
+            case 13: return ref GetReference13<T>(array, indexes);
+            case 14: return ref GetReference14<T>(array, indexes);
+            case 15: return ref GetReference15<T>(array, indexes);
+            case 16: return ref GetReference16<T>(array, indexes);
+            case 17: return ref GetReference17<T>(array, indexes);
+            case 18: return ref GetReference18<T>(array, indexes);
+            case 19: return ref GetReference19<T>(array, indexes);
+            case 20: return ref GetReference20<T>(array, indexes);
+            case 21: return ref GetReference21<T>(array, indexes);
+            case 22: return ref GetReference22<T>(array, indexes);
+            case 23: return ref GetReference23<T>(array, indexes);
+            case 24: return ref GetReference24<T>(array, indexes);
+            case 25: return ref GetReference25<T>(array, indexes);
+            case 26: return ref GetReference26<T>(array, indexes);
+            case 27: return ref GetReference27<T>(array, indexes);
+            case 28: return ref GetReference28<T>(array, indexes);
+            case 29: return ref GetReference29<T>(array, indexes);
+            case 30: return ref GetReference30<T>(array, indexes);
+            case 31: return ref GetReference31<T>(array, indexes);
+            case 32: return ref GetReference32<T>(array, indexes);
+            default: return ref GetReferenceAny<T>(array, indexes);
+        }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe static ref byte GetReference<T>(T[,,] array, int index1, int index2, int index3)
+    public unsafe static ref T GetReferenceAny<T>(object owner, scoped ReadOnlySpan<int> indexes)
     {
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
         try
         {
-            return ref Unsafe.As<T, byte>(ref array[index1, index2, index3]);
+            Debug.Assert(owner is Array);
+            Debug.Assert(owner.GetType().GetArrayRank() == indexes.Length);
+            Delegate @delegate = ArrayAccess.GetOrAdd(owner.GetType(), ArrayAccessCreator);
+            Debug.Assert(@delegate is FuncArray<T>);
+            return ref Unsafe.As<FuncArray<T>>(@delegate)(owner, ref MemoryMarshal.GetReference(indexes));
         }
-        catch (IndexOutOfRangeException exception)
+        catch (NotSupportedException)
         {
-            ThrowArgumentException_IndexOutOfBounds(exception);
-#if NET5_0_OR_GREATER
-            return ref Unsafe.NullRef<byte>();
-#else
-            return ref Unsafe.AsRef<byte>(null);
+        }
 #endif
-        }
+        ThrowNotImplementedException();
+        return ref Unsafe.AsRef<T>(null);
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe static ref byte GetReference<T>(T[,,,] array, int index1, int index2, int index3, int index4)
-    {
-        try
-        {
-            return ref Unsafe.As<T, byte>(ref array[index1, index2, index3, index4]);
-        }
-        catch (IndexOutOfRangeException exception)
-        {
-            ThrowArgumentException_IndexOutOfBounds(exception);
-#if NET5_0_OR_GREATER
-            return ref Unsafe.NullRef<byte>();
-#else
-            return ref Unsafe.AsRef<byte>(null);
 #endif
-        }
-    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int CalculateIndex(Array array, ReadOnlySpan<int> indexes)
@@ -77,6 +228,19 @@ internal static class Utils
             m *= 1 + upperBound - lowerBound;
         }
         return index;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void CheckBounds(Array array, ReadOnlySpan<int> indexes)
+    {
+        for (int i = indexes.Length - 1; i >= 0; i--)
+        {
+            int subIndex = indexes[i];
+            int lowerBound = array.GetLowerBound(i);
+            int upperBound = array.GetUpperBound(i);
+            if (subIndex < lowerBound || subIndex > upperBound)
+                ThrowArgumentException_OwnerIndexOutOfBounds();
+        }
     }
 
     public static void ThrowArgumentException_ArrayIndexesOutOfBounds()
@@ -176,19 +340,14 @@ internal static class Utils
         => throw new ArgumentNullException("memoryManager");
 
     [DoesNotReturn]
-    public static void ThrowArgumentNullException_Indexes()
-        => throw new ArgumentNullException("indexes");
-
-    [DoesNotReturn]
-    public static void ThrowArgumentNullException_Offset()
-        => throw new ArgumentNullException("offset");
-
-    [DoesNotReturn]
     public static void ThrowArgumentNullException_Owner()
         => throw new ArgumentNullException("owner");
 
     public static void ThrowArgumentNullException_Pointer()
         => throw new ArgumentNullException("pointer");
+
+    public static void ThrowArgumentNullException_ReferenceProvider()
+        => throw new ArgumentNullException("referenceProvider");
 
     public static void ThrowArrayTypeMismatchException_Array()
         => throw new ArrayTypeMismatchException("Array's actual element type doesn't match with TReference.");
@@ -199,14 +358,8 @@ internal static class Utils
     public static void ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions()
         => throw new InvalidOperationException("TOwner generic parameter must be a reference type, unless this offset is accessing an element index from Memory<TReference>, an ArraySegment<TReference> or from a type assignable to IMemoryOwner<TReference>.");
 
-    public static void ThrowInvalidOperationException_InvalidTReferenceTypeOrMode()
-        => throw new InvalidOperationException("TReference generic parameter must be a value type and the offset must be for a field.");
-
     public static void ThrowInvalidOperationException_InvalidTReferenceTypeOnlyValueTypes()
         => throw new InvalidOperationException("TRefence generic parameter must be a value type.");
-
-    public static void ThrowInvalidOperationException_InvalidTTypeOrMode()
-        => throw new InvalidOperationException("T generic parameter must be a value type and the offset must be for a field.");
 
     public static void ThrowInvalidOperationException_OnlyArrayOrIMemoryOwner()
         => throw new InvalidOperationException("TOwner generic parameter is not an array whose element type is TReference nor a IMemoryOwner<TReference>.");
@@ -218,16 +371,18 @@ internal static class Utils
         => throw new RankException("TOwner generic parameter is an array whose rank is not one.");
 }
 
-/// <summary>
-/// Encapsulates a method that has one parameter and returns a reference of the type specified by the <typeparamref name="TResult"/> parameter.
-/// </summary>
-/// <typeparam name="T">The type of the parameter of the method that this delegate encapsulates.</typeparam>
-/// <typeparam name="TResult">The type of the return value of the method that this delegate encapsulates.</typeparam>
-/// <param name="arg">The parameter of the method that this delegate encapsulates.</param>
-/// <returns>The return value of the method that this delegate encapsulates.</returns>
-public delegate ref TResult FuncRef<T, TResult>(T arg);
-
 internal delegate ref TResult RefFuncRef<T, TResult>(ref T arg);
+
+internal delegate ref TResult FuncArray<TResult>(object array, ref int firstIndex);
+
+/// <summary>
+/// Encapsulates a method that has two parameters and returns a reference of the type specified by the <typeparamref name="TResult"/> parameter.
+/// </summary>
+/// <typeparam name="TResult">The type of the return value of the method that this delegate encapsulates.</typeparam>
+/// <param name="managedState">The first parameter of the method that this delegate encapsulates.</param>
+/// <param name="unmanagedState">The second parameter of the method that this delegate encapsulates.</param>
+/// <returns>The return value of the method that this delegate encapsulates.</returns>
+public delegate ref TResult ReferenceProvider<TResult>(object? managedState, nint unmanagedState);
 
 internal enum Mode
 {
@@ -243,13 +398,6 @@ internal enum Mode
     ArrayUnkown,
 }
 
-internal readonly struct RawMemory
-{
-    public readonly object? _object;
-    public readonly int _index;
-    public readonly int _length;
-}
-
 internal sealed class MemoryWrapper<T>(Memory<T> memory) : IMemoryOwner<T>
 {
     public Memory<T> Memory => memory;
@@ -259,29 +407,50 @@ internal sealed class MemoryWrapper<T>(Memory<T> memory) : IMemoryOwner<T>
     }
 }
 
-internal static class UnboxerHelper<T>
+#if NET8_0_OR_GREATER
+internal static class UnboxerHelper<TArray>
 {
-    private static readonly IUnboxer Impl = (IUnboxer)Activator.CreateInstance(typeof(Unboxer<>).MakeGenericType(typeof(T)))!;
+    public static readonly IUnboxer Impl = (IUnboxer)Activator.CreateInstance(typeof(Unboxer<>).MakeGenericType(typeof(TArray)))!;
 
-    public interface IUnboxer
+    internal interface IUnboxer
     {
-        public ref T Unbox(object o);
+        public ref TArray Unbox(object owner);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ref T Unbox(object o) => ref Impl.Unbox(o);
+    public static ReferenceProvider<TReference> GetElementAccessor<TReference>()
+    {
+        Debug.Assert(typeof(TArray).IsDefined(typeof(InlineArrayAttribute)));
+        return new ReferenceProvider<TReference>(Work);
+
+        static ref TReference Work(object? owner, nint index)
+        {
+            Debug.Assert(owner is not null);
+            Debug.Assert(typeof(TArray).IsDefined(typeof(InlineArrayAttribute)));
+            Debug.Assert(index < typeof(TArray).GetCustomAttribute<InlineArrayAttribute>()!.Length);
+            ref TArray array = ref UnboxerHelper<TArray>.Impl.Unbox(owner);
+            return ref Unsafe.Add(ref Unsafe.As<TArray, TReference>(ref array), (int)index);
+        }
+    }
 }
 
 internal sealed class Unboxer<T> : UnboxerHelper<T>.IUnboxer
     where T : struct
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref T Unbox(object o)
-    {
-#if NET5_0_OR_GREATER
-        return ref Unsafe.Unbox<T>(o);
-#else
-        return ref ObjectHelpers.Unbox<T>(o);
+    public ref T Unbox(object owner) => ref Unsafe.Unbox<T>(owner);
+}
 #endif
-    }
+
+internal static class NotSupported<T>
+{
+    public unsafe static readonly ReferenceProvider<T> Impl = (_, _) =>
+    {
+        Utils.ThrowNotImplementedException();
+#if NET5_0_OR_GREATER
+        return ref Unsafe.NullRef<T>();
+#else
+        return ref Unsafe.AsRef<T>(null);
+#endif
+    };
 }
