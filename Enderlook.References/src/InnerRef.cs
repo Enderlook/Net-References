@@ -40,9 +40,7 @@ public readonly struct InnerRef<T>
                     Debug.Assert(unmanaged < array.Length);
                     return ref Unsafe.Add(ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(array)), unmanaged);
 #else
-                    Debug.Assert(owner is T[]);
-                    T[] array = Unsafe.As<T[]>(owner);
-                    return ref array[(int)unmanaged];
+                    return ref owner is T[] array ? ref array[(int)unmanaged] : ref ObjectHelpers.GetReference1<T>(owner, (int)unmanaged);
 #endif
                 }
                 case null when unmanaged < 0:

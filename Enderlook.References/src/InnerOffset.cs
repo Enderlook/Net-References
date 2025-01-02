@@ -724,27 +724,8 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
             Utils.ThrowArgumentException_OwnerIndexOutOfBounds();
 #if NET6_0_OR_GREATER
         return InnerRef<TReference>.CreateUnsafe(owner, index - lowerBound, default);
-#elif NETSTANDARD2_1_OR_GREATER
-        if (_referenceCached)
-        {
-            DynamicMethod dynamicMethod = new(
-                "GetElementRef",
-                typeof(TReference).MakeByRefType(),
-                [typeof(object), typeof(nint)]
-            );
-            ILGenerator il = dynamicMethod.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, Utils.UnsafeAsMethod.MakeGenericMethod(ownerType));
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Call, ownerType.GetMethod("Address", [typeof(TReference)]));
-            il.Emit(OpCodes.Ret);
-            _referencePayload = dynamicMethod.CreateDelegate(typeof(ReferenceProvider<TReference>));
-            _referenceCached = true;
-        }
-        return InnerRef<TReference>.CreateUnsafe(owner, index, _referencePayload);
 #else
-        return InnerRef<TReference>.CreateUnsafe(owner, index, NotSupported<TReference>.Impl);
+        return InnerRef<TReference>.CreateUnsafe(owner, index, default);
 #endif
     }
 

@@ -157,6 +157,7 @@ internal static partial class Utils
         // In theory, the ECMA only supports up to 32 dimensions, but we have a fallback just to be sure.
         switch (indexes.Length)
         {
+            case 1: return ref GetReference1<T>(array, indexes);
             case 2: return ref GetReference2<T>(array, indexes);
             case 3: return ref GetReference3<T>(array, indexes);
             case 4: return ref GetReference4<T>(array, indexes);
@@ -190,6 +191,16 @@ internal static partial class Utils
             case 32: return ref GetReference32<T>(array, indexes);
             default: return ref GetReferenceAny<T>(array, indexes);
         }
+    }
+
+    private static ref T GetReference1<T>(object array, int[] indexes)
+    {
+        Debug.Assert(indexes.Length == 1);
+#if NET5_0_OR_GREATER
+        return ref ObjectHelpers.GetReference1<T>(array, MemoryMarshal.GetArrayDataReference(indexes));
+#else
+        return ref ObjectHelpers.GetReference1<T>(array, indexes[0]);
+#endif
     }
 
     public unsafe static ref T GetReferenceAny<T>(object owner, scoped ReadOnlySpan<int> indexes)
@@ -441,16 +452,3 @@ internal sealed class Unboxer<T> : UnboxerHelper<T>.IUnboxer
     public ref T Unbox(object owner) => ref Unsafe.Unbox<T>(owner);
 }
 #endif
-
-internal static class NotSupported<T>
-{
-    public unsafe static readonly ReferenceProvider<T> Impl = (_, _) =>
-    {
-        Utils.ThrowNotImplementedException();
-#if NET5_0_OR_GREATER
-        return ref Unsafe.NullRef<T>();
-#else
-        return ref Unsafe.AsRef<T>(null);
-#endif
-    };
-}
