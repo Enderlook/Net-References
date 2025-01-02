@@ -1,6 +1,7 @@
 ﻿using System.Buffers;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -632,6 +633,9 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
         return default;
     }
 
+#if NET5_0_OR_GREATER
+    [DynamicDependency("As", typeof(Unsafe))]
+#endif
     private void FromField<T>(T owner, FieldInfo fieldInfo)
     {
         Debug.Assert(owner is not null);
@@ -675,7 +679,7 @@ public sealed class InnerOffset<TOwner, TReference> : InnerOffset
             DynamicMethod dynamicMethod = new("GetFieldRef", typeof(TReference).MakeByRefType(), [typeof(object), typeof(nint)]);
             ILGenerator ilGenerator = dynamicMethod.GetILGenerator();
             ilGenerator.Emit(OpCodes.Ldarg_0);
-            ilGenerator.Emit(OpCodes.Call, Utils.UnsafeAsMethod.MakeGenericMethod([typeof(TOwner)]));
+            ilGenerator.Emit(OpCodes.Call, Utils.UnsafeAsFor([typeof(TOwner)]));
             ilGenerator.Emit(OpCodes.Ldflda, fieldInfo);
             ilGenerator.Emit(OpCodes.Ret);
 #if NET5_0_OR_GREATER

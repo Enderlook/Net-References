@@ -12,7 +12,7 @@ namespace Enderlook.References;
 internal static partial class Utils
 {
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-    public static readonly MethodInfo UnsafeAsMethod = typeof(Unsafe)
+    private static readonly MethodInfo UnsafeAsMethod = typeof(Unsafe)
         .GetMethod(
             nameof(Unsafe.As),
             1,
@@ -21,6 +21,12 @@ internal static partial class Utils
             [typeof(object)],
             null
         );
+
+#if NET5_0_OR_GREATER
+    [DynamicDependency("As", typeof(Unsafe))]
+#endif
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static MethodInfo UnsafeAsFor(Type[] types) => UnsafeAsMethod.MakeGenericMethod(types);
 #endif
 
 #if !NET6_0_OR_GREATER
@@ -28,14 +34,12 @@ internal static partial class Utils
     // This is used in platforms which doesn't have `MemoryMarshal.GetArrayDataReference(Array)`
     // when the array is non-zero-based single-dimensional, or a multi-dimensional array with rank > 32.
     private static readonly ConcurrentDictionary<Type, Delegate> ArrayAccess = new();
-    private static readonly Func<Type, Delegate> ArrayAccessCreator = static (
 #if NET5_0_OR_GREATER
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
+    [DynamicDependency("Add", typeof(Unsafe))]
 #endif
-    arrayType) =>
+    private static readonly Func<Type, Delegate> ArrayAccessCreator = static (arrayType) =>
     {
         Type[] arrayTypeArray = [arrayType];
-        MethodInfo unsafeAsMethod = UnsafeAsMethod.MakeGenericMethod(arrayTypeArray);
         MethodInfo unsafeAddMethod = typeof(Unsafe)
             .GetMethod(
                 nameof(Unsafe.Add),
@@ -54,7 +58,7 @@ internal static partial class Utils
         );
         ILGenerator il = dynamicMethod.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, unsafeAsMethod);
+        il.Emit(OpCodes.Call, UnsafeAsFor(arrayTypeArray));
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldind_I4);
 
