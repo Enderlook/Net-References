@@ -6,9 +6,9 @@ using System.Text;
 namespace Enderlook.References.SourceGenerators;
 
 [Generator]
-public sealed class UtilsHelper : ISourceGenerator
+public sealed class UtilsHelper : IIncrementalGenerator
 {
-    public void Execute(GeneratorExecutionContext context)
+    private void PostInitialize(IncrementalGeneratorPostInitializationContext context)
     {
         StringBuilder builder = new();
 
@@ -55,7 +55,8 @@ public sealed class UtilsHelper : ISourceGenerator
         context.AddSource("UtilsHelper.g.cs", SourceText.From(builder.ToString(), Encoding.UTF8));
     }
 
-    public void Initialize(GeneratorInitializationContext context)
+    public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        context.RegisterPostInitializationOutput(PostInitialize);
     }
 }
