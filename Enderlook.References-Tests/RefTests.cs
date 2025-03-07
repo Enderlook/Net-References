@@ -6,29 +6,29 @@ using System.Runtime.InteropServices;
 
 namespace Enderlook.References.Tests;
 
-public class InnerRefTests
+public class RefTests
 {
     [Fact]
     public unsafe void Pointer()
     {
         int* pointer = (int*)Marshal.AllocHGlobal(sizeof(int));
-        InnerRef<int> reference = new(pointer);
+        Ref<int> reference = new(pointer);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref Unsafe.AsRef<int>(pointer)));
         reference = pointer;
         Assert.True(Unsafe.AreSame(ref reference.Value, ref Unsafe.AsRef<int>(pointer)));
         Marshal.FreeHGlobal((nint)pointer);
 
-        Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(int*)));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(int*)));
     }
 
     [Fact]
     public void ZSArray()
     {
         int[] array = new int[3];
-        InnerRef<int> reference = new(array, 1);
+        Ref<int> reference = new(array, 1);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
 
-        InnerOffset<int[], int> offset = new(1);
+        Offset<int[], int> offset = new(1);
         reference = offset.From(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
         reference = offset.FromObject(array);
@@ -46,27 +46,27 @@ public class InnerRefTests
         reference = offset.FromObject(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
 
-        offset = InnerOffset.ForArrayElement<int>(1);
+        offset = Offset.ForArrayElement<int>(1);
         reference = offset.From(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
         reference = offset.FromObject(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(int[])!, 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerRef<int>(array, -1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, array.Length * 2));
-        Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>(new string[3], 1));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(int[])!, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>(array, -1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, array.Length * 2));
+        Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3], 1));
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerRef<int>(array, [-1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [array.Length * 2]));
-        Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>(new string[3], [1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, []));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [0, 0]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>(array, [-1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [array.Length * 2]));
+        Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3], [1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, []));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [0, 0]));
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerOffset<int[], int>(-1));
-        Assert.Throws<ArgumentNullException>(() => new InnerOffset<int[], int>(default(Expression<Func<int[], int>>)!));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerOffset<int[], int>(e => e[-1]));
-        Assert.Throws<ArgumentOutOfRangeException>(() => InnerOffset.ForArrayElement<int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<int[], int>(-1));
+        Assert.Throws<ArgumentNullException>(() => new Offset<int[], int>(default(Expression<Func<int[], int>>)!));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<int[], int>(e => e[-1]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForArrayElement<int>(-1));
 
         Assert.Throws<ArgumentNullException>(() => offset.From(null!));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -80,10 +80,10 @@ public class InnerRefTests
     public void Memory()
     {
         Memory<int> memory = new int[3].AsMemory();
-        InnerRef<int> reference = new(memory, 1);
+        Ref<int> reference = new(memory, 1);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Span[1]));
 
-        InnerOffset<Memory<int>, int> offset = new(1);
+        Offset<Memory<int>, int> offset = new(1);
         reference = offset.From(memory);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Span[1]));
         reference = offset.FromObject(memory);
@@ -99,7 +99,7 @@ public class InnerRefTests
         reference_ = ref offset.FromRef(ref memory);
         Assert.True(Unsafe.AreSame(ref reference_, ref memory.Span[1]));
 
-        offset = InnerOffset.ForMemoryElement<int>(1);
+        offset = Offset.ForMemoryElement<int>(1);
         reference = offset.From(memory);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Span[1]));
         reference = offset.FromObject(memory);
@@ -127,7 +127,7 @@ public class InnerRefTests
         reference_ = ref offset.FromRef(ref memory);
         Assert.True(Unsafe.AreSame(ref reference_, ref memory.Span[1]));
 
-        offset = InnerOffset.ForMemoryElement<int>(1);
+        offset = Offset.ForMemoryElement<int>(1);
         reference = offset.From(memory);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Span[1]));
         reference = offset.FromObject(memory);
@@ -155,7 +155,7 @@ public class InnerRefTests
         reference_ = ref offset.FromRef(ref memory);
         Assert.True(Unsafe.AreSame(ref reference_, ref memory.Span[1]));
 
-        offset = InnerOffset.ForMemoryElement<int>(1);
+        offset = Offset.ForMemoryElement<int>(1);
         reference = offset.From(memory);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Span[1]));
         reference = offset.FromObject(memory);
@@ -183,7 +183,7 @@ public class InnerRefTests
         reference_ = ref offset.FromRef(ref memory);
         Assert.True(Unsafe.AreSame(ref reference_, ref memory.Span[1]));
 
-        offset = InnerOffset.ForMemoryElement<int>(1);
+        offset = Offset.ForMemoryElement<int>(1);
         reference = offset.From(memory);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Span[1]));
         reference = offset.FromObject(memory);
@@ -191,14 +191,14 @@ public class InnerRefTests
         reference_ = ref offset.FromRef(ref memory);
         Assert.True(Unsafe.AreSame(ref reference_, ref memory.Span[1]));
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerRef<int>(memory, -1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(memory, memory.Length * 2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>(memory, -1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(memory, memory.Length * 2));
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerRef<int>(memory, -1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(memory, memory.Length * 2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>(memory, -1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(memory, memory.Length * 2));
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerOffset<Memory<int>, int>(-1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => InnerOffset.ForMemoryElement<int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<Memory<int>, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForMemoryElement<int>(-1));
 
         Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0].AsMemory()));
         Assert.Throws<ArgumentException>(() => offset.From(new int[0].AsMemory()));
@@ -214,68 +214,73 @@ public class InnerRefTests
     public void MemoryWrapper()
     {
         MemoryWrapper<int> memory = new(new int[3].AsMemory());
-        InnerRef<int> reference = new(memory, 1);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Ref<int> reference = new(memory, 1);
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
-        InnerOffset<MemoryWrapper<int>, int> offset = new(1);
+        Offset<MemoryWrapper<int>, int> offset = new(1);
         reference = offset.From(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
         reference = offset.FromObject(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
         offset = new([1]);
         reference = offset.From(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
         reference = offset.FromObject(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
-        offset = InnerOffset.ForIMemoryOwnerElement<MemoryWrapper<int>, int>(1);
+        offset = Offset.ForIMemoryOwnerElement<MemoryWrapper<int>, int>(1);
         reference = offset.From(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
         reference = offset.FromObject(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
-        InnerOffset<IMemoryOwner<int>, int> offset2 = InnerOffset.ForIMemoryOwnerElement<int>(1);
+        Offset<IMemoryOwner<int>, int> offset2 = Offset.ForIMemoryOwnerElement<int>(1);
         reference = offset.From(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
         reference = offset.FromObject(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
         memory = new MemoryWrapper<int>(new int[10].AsMemory(2, 3));
         reference = new(memory, 1);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
         offset = new(1);
         reference = offset.From(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
         reference = offset.FromObject(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
         offset = new([1]);
         reference = offset.From(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
         reference = offset.FromObject(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
-        offset = InnerOffset.ForIMemoryOwnerElement<MemoryWrapper<int>, int>(1);
+        offset = Offset.ForIMemoryOwnerElement<MemoryWrapper<int>, int>(1);
         reference = offset.From(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
         reference = offset.FromObject(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
-        offset2 = InnerOffset.ForIMemoryOwnerElement<int>(1);
+        offset2 = Offset.ForIMemoryOwnerElement<int>(1);
         reference = offset.From(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
         reference = offset.FromObject(memory);
-        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.GetSpan()[1]));
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(IMemoryOwner<int>)!, 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerRef<int>(memory, -1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(memory, memory.Memory.Length * 2));
+        Offset<MemoryWrapper_<int>, int> offset_ = new(1);
+        MemoryWrapper_<int> memory_ = new(new int[2]);
+        ref int reference_ = ref offset_.FromRef(ref memory_);
+        Assert.True(Unsafe.AreSame(ref reference_, ref memory_.Memory.Span[1]));
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerOffset<MemoryWrapper<int>, int>(-1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => InnerOffset.ForIMemoryOwnerElement<MemoryWrapper<int>, int>(-1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => InnerOffset.ForIMemoryOwnerElement<int>(-1));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(IMemoryOwner<int>)!, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>(memory, -1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(memory, memory.Memory.Length * 2));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<MemoryWrapper<int>, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForIMemoryOwnerElement<MemoryWrapper<int>, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForIMemoryOwnerElement<int>(-1));
 
         Assert.Throws<ArgumentNullException>(() => offset.From(null!));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -289,10 +294,10 @@ public class InnerRefTests
     public void ArraySegment()
     {
         ArraySegment<int> arraySegment = new(new int[3]);
-        InnerRef<int> reference = new(arraySegment, 1);
+        Ref<int> reference = new(arraySegment, 1);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref arraySegment.AsSpan()[1]));
 
-        InnerOffset<ArraySegment<int>, int> offset = new(1);
+        Offset<ArraySegment<int>, int> offset = new(1);
         reference = offset.From(arraySegment);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref arraySegment.AsSpan()[1]));
         reference = offset.FromObject(arraySegment);
@@ -318,7 +323,7 @@ public class InnerRefTests
         Assert.True(Unsafe.AreSame(ref reference_, ref arraySegment.AsSpan()[1]));
 #endif
 
-        offset = InnerOffset.ForArraySegmentElement<int>(1);
+        offset = Offset.ForArraySegmentElement<int>(1);
         reference = offset.From(arraySegment);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref arraySegment.AsSpan()[1]));
         reference = offset.FromObject(arraySegment);
@@ -356,7 +361,7 @@ public class InnerRefTests
         Assert.True(Unsafe.AreSame(ref reference_, ref arraySegment.AsSpan()[1]));
 #endif
 
-        offset = InnerOffset.ForArraySegmentElement<int>(1);
+        offset = Offset.ForArraySegmentElement<int>(1);
         reference = offset.From(arraySegment);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref arraySegment.AsSpan()[1]));
         reference = offset.FromObject(arraySegment);
@@ -364,17 +369,17 @@ public class InnerRefTests
         reference_ = ref offset.FromRef(ref arraySegment);
         Assert.True(Unsafe.AreSame(ref reference_, ref arraySegment.AsSpan()[1]));
 
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(default(ArraySegment<int>), 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerRef<int>(arraySegment, -1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(arraySegment, arraySegment.Count * 2));
-        Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>(new ArraySegment<object>(new string[3]), 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(default(ArraySegment<int>), 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>(arraySegment, -1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(arraySegment, arraySegment.Count * 2));
+        Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new ArraySegment<object>(new string[3]), 1));
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerOffset<ArraySegment<int>, int>(-1));
-        Assert.Throws<ArgumentNullException>(() => new InnerOffset<ArraySegment<int>, int>(default(Expression<Func<ArraySegment<int>, int>>)!));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<ArraySegment<int>, int>(-1));
+        Assert.Throws<ArgumentNullException>(() => new Offset<ArraySegment<int>, int>(default(Expression<Func<ArraySegment<int>, int>>)!));
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerOffset<ArraySegment<int>, int>(e => e[-1]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<ArraySegment<int>, int>(e => e[-1]));
 #endif
-        Assert.Throws<ArgumentOutOfRangeException>(() => InnerOffset.ForArraySegmentElement<int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForArraySegmentElement<int>(-1));
 
         Assert.Throws<ArgumentException>(() => offset.From(default));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -399,10 +404,10 @@ public class InnerRefTests
     {
         Array array = Array.CreateInstance(typeof(int), [3], [-1]);
         array.SetValue(1, 1);
-        InnerRef<int> reference = new(array, 1);
+        Ref<int> reference = new(array, 1);
         Assert.Equal(1, reference);
 
-        InnerOffset<Array, int> offset = new(1);
+        Offset<Array, int> offset = new(1);
         reference = offset.From(array);
         Assert.Equal(1, reference);
         reference = offset.FromObject(array);
@@ -478,10 +483,10 @@ public class InnerRefTests
     public void Array2()
     {
         int[,] array = new int[2, 3];
-        InnerRef<int> reference = new(array, 1, 2);
+        Ref<int> reference = new(array, 1, 2);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
 
-        InnerOffset<int[,], int> offset = new(1, 2);
+        Offset<int[,], int> offset = new(1, 2);
         reference = offset.From(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
         reference = offset.FromObject(array);
@@ -499,29 +504,29 @@ public class InnerRefTests
         reference = offset.FromObject(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
 
-        offset = InnerOffset.ForArrayElement<int>(1, 2);
+        offset = Offset.ForArrayElement<int>(1, 2);
         reference = offset.From(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
         reference = offset.FromObject(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default!, 0, 0));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, -1, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, -1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 5, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, 5));
-        Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>(new string[3, 3], 1, 1));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, 0, 0));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, -1, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, -1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 5, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 5));
+        Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3, 3], 1, 1));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default!, [0, 0]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [-1, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, -1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [5, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, 5]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [0]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [0, 0, 0]));
-        Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>(new string[3, 3], [1, 1]));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, [0, 0]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [-1, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, -1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [5, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 5]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [0]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [0, 0, 0]));
+        Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3, 3], [1, 1]));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerOffset<int[,], int>(default(Expression<Func<int[,], int>>)!));
+        Assert.Throws<ArgumentNullException>(() => new Offset<int[,], int>(default(Expression<Func<int[,], int>>)!));
 
         Assert.Throws<ArgumentNullException>(() => offset.From(null!));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -537,10 +542,10 @@ public class InnerRefTests
     public void Array3()
     {
         int[,,] array = new int[2, 3, 4];
-        InnerRef<int> reference = new(array, 1, 2, 3);
+        Ref<int> reference = new(array, 1, 2, 3);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
 
-        InnerOffset<int[,,], int> offset = new(1, 2, 3);
+        Offset<int[,,], int> offset = new(1, 2, 3);
         reference = offset.From(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
         reference = offset.FromObject(array);
@@ -558,33 +563,33 @@ public class InnerRefTests
         reference = offset.FromObject(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
 
-        offset = InnerOffset.ForArrayElement<int>(1, 2, 3);
+        offset = Offset.ForArrayElement<int>(1, 2, 3);
         reference = offset.From(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
         reference = offset.FromObject(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default!, 0, 0, 0));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, -1, 1, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, -1, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, 1, -1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 5, 1, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, 5, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, 1, 5));
-        Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>(new string[3, 3, 3], 1, 1, 1));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, 0, 0, 0));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, -1, 1, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, -1, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, -1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 5, 1, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 5, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, 5));
+        Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3, 3, 3], 1, 1, 1));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default!, [0, 0, 0]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [-1, 1, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, -1, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, 1, -1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [5, 1, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, 5, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, 1, 5]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [0, 0]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [0, 0, 0, 0]));
-        Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>(new string[3, 3, 3], [1, 1, 1]));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, [0, 0, 0]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [-1, 1, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, -1, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 1, -1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [5, 1, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 5, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 1, 5]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [0, 0]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [0, 0, 0, 0]));
+        Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3, 3, 3], [1, 1, 1]));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerOffset<int[,,], int>(default(Expression<Func<int[,,], int>>)!));
+        Assert.Throws<ArgumentNullException>(() => new Offset<int[,,], int>(default(Expression<Func<int[,,], int>>)!));
 
         Assert.Throws<ArgumentNullException>(() => offset.From(null!));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -600,10 +605,10 @@ public class InnerRefTests
     public void Array4()
     {
         int[,,,] array = new int[2, 3, 4, 5];
-        InnerRef<int> reference = new(array, 1, 2, 3, 4);
+        Ref<int> reference = new(array, 1, 2, 3, 4);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
 
-        InnerOffset<int[,,,], int> offset = new(1, 2, 3, 4);
+        Offset<int[,,,], int> offset = new(1, 2, 3, 4);
         reference = offset.From(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
         reference = offset.FromObject(array);
@@ -621,37 +626,37 @@ public class InnerRefTests
         reference = offset.FromObject(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
 
-        offset = InnerOffset.ForArrayElement<int>(1, 2, 3, 4);
+        offset = Offset.ForArrayElement<int>(1, 2, 3, 4);
         reference = offset.From(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
         reference = offset.FromObject(array);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default!, 0, 0, 0, 0));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, -1, 1, 1, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, -1, 1, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, 1, -1, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, 1, 1, -1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 5, 1, 1, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, 5, 1, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, 1, 5, 1));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, 1, 1, 1, 5));
-        Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>(new string[3, 3, 3, 3], 1, 1, 1, 1));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, 0, 0, 0, 0));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, -1, 1, 1, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, -1, 1, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, -1, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, 1, -1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 5, 1, 1, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 5, 1, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, 5, 1));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, 1, 5));
+        Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3, 3, 3, 3], 1, 1, 1, 1));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default!, [0, 0, 0, 0]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [-1, 1, 1, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, -1, 1, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, 1, -1, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, 1, 1, -1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [5, 1, 1, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, 5, 1, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, 1, 5, 1]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [1, 1, 1, 5]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [0, 0, 0]));
-        Assert.Throws<ArgumentException>(() => new InnerRef<int>(array, [0, 0, 0, 0, 0]));
-        Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>(new string[3, 3, 3, 3], [1, 1, 1, 1]));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, [0, 0, 0, 0]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [-1, 1, 1, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, -1, 1, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 1, -1, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 1, 1, -1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [5, 1, 1, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 5, 1, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 1, 5, 1]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 1, 1, 5]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [0, 0, 0]));
+        Assert.Throws<ArgumentException>(() => new Ref<int>(array, [0, 0, 0, 0, 0]));
+        Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3, 3, 3, 3], [1, 1, 1, 1]));
 
-        Assert.Throws<ArgumentNullException>(() => new InnerOffset<int[,,,], int>(default(Expression<Func<int[,,,], int>>)!));
+        Assert.Throws<ArgumentNullException>(() => new Offset<int[,,,], int>(default(Expression<Func<int[,,,], int>>)!));
 
         Assert.Throws<ArgumentNullException>(() => offset.From(null!));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -668,10 +673,10 @@ public class InnerRefTests
     {
         {
             int[] array = new int[3];
-            InnerRef<int> reference = new((Array)array, 1);
+            Ref<int> reference = new((Array)array, 1);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
 
-            InnerOffset<Array, int> offset = new(1);
+            Offset<Array, int> offset = new(1);
             reference = offset.From(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
             reference = offset.FromObject(array);
@@ -683,17 +688,17 @@ public class InnerRefTests
             reference = offset.FromObject(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
 
-            Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(Array)!, 0));
-            Assert.Throws<ArgumentOutOfRangeException>(() => new InnerRef<int>((Array)array, -1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, array.Length * 2));
-            Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>((Array)new string[3], 1));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>((Array)array, -1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, array.Length * 2));
+            Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>((Array)new string[3], 1));
 
-            Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(Array)!, [0]));
-            Assert.Throws<ArgumentOutOfRangeException>(() => new InnerRef<int>((Array)array, [-1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [array.Length * 2]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, []));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [0, 0]));
-            Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>((Array)new string[3], [1]));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, [0]));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>((Array)array, [-1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [array.Length * 2]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, []));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [0, 0]));
+            Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>((Array)new string[3], [1]));
 
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -709,10 +714,10 @@ public class InnerRefTests
 
         {
             int[,] array = new int[2, 3];
-            InnerRef<int> reference = new((Array)array, 1, 2);
+            Ref<int> reference = new((Array)array, 1, 2);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
 
-            InnerOffset<Array, int> offset = new(1, 2);
+            Offset<Array, int> offset = new(1, 2);
             reference = offset.From(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
             reference = offset.FromObject(array);
@@ -724,21 +729,21 @@ public class InnerRefTests
             reference = offset.FromObject(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
 
-            Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(Array)!, 0, 0));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, -1, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, -1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 5, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, 5));
-            Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>((Array)new string[3, 3], 1, 1));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, 0, 0));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, -1, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, -1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 5, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, 5));
+            Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>((Array)new string[3, 3], 1, 1));
 
-            Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(Array)!, [0, 0]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [-1, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, -1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [5, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, 5]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [0]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [0, 0, 0]));
-            Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>((Array)new string[3, 3], [1, 1]));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, [0, 0]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [-1, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, -1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [5, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, 5]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [0]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [0, 0, 0]));
+            Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>((Array)new string[3, 3], [1, 1]));
 
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -756,10 +761,10 @@ public class InnerRefTests
 
         {
             int[,,] array = new int[2, 3, 4];
-            InnerRef<int> reference = new((Array)array, 1, 2, 3);
+            Ref<int> reference = new((Array)array, 1, 2, 3);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
 
-            InnerOffset<Array, int> offset = new(1, 2, 3);
+            Offset<Array, int> offset = new(1, 2, 3);
             reference = offset.From(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
             reference = offset.FromObject(array);
@@ -771,25 +776,25 @@ public class InnerRefTests
             reference = offset.FromObject(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
 
-            Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(Array)!, 0, 0, 0));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, -1, 1, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, -1, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, 1, -1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 5, 1, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, 5, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, 1, 5));
-            Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>((Array)new string[3, 3, 3], 1, 1, 1));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, 0, 0, 0));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, -1, 1, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, -1, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, 1, -1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 5, 1, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, 5, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, 1, 5));
+            Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>((Array)new string[3, 3, 3], 1, 1, 1));
 
-            Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(Array)!, [0, 0, 0]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [-1, 1, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, -1, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, 1, -1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [5, 1, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, 5, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, 1, 5]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [0, 0]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [0, 0, 0, 0]));
-            Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>((Array)new string[3, 3, 3], [1, 1, 1]));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, [0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [-1, 1, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, -1, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, 1, -1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [5, 1, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, 5, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, 1, 5]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [0, 0]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [0, 0, 0, 0]));
+            Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>((Array)new string[3, 3, 3], [1, 1, 1]));
 
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -807,10 +812,10 @@ public class InnerRefTests
 
         {
             int[,,,] array = new int[2, 3, 4, 5];
-            InnerRef<int> reference = new((Array)array, 1, 2, 3, 4);
+            Ref<int> reference = new((Array)array, 1, 2, 3, 4);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
 
-            InnerOffset<Array, int> offset = new(1, 2, 3, 4);
+            Offset<Array, int> offset = new(1, 2, 3, 4);
             reference = offset.From(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
             reference = offset.FromObject(array);
@@ -822,29 +827,29 @@ public class InnerRefTests
             reference = offset.FromObject(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
 
-            Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(Array)!, 0, 0, 0, 0));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, -1, 1, 1, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, -1, 1, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, 1, -1, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, 1, 1, -1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 5, 1, 1, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, 5, 1, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, 1, 5, 1));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, 1, 1, 1, 5));
-            Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>((Array)new string[3, 3, 3, 3], 1, 1, 1, 1));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, 0, 0, 0, 0));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, -1, 1, 1, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, -1, 1, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, 1, -1, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, 1, 1, -1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 5, 1, 1, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, 5, 1, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, 1, 5, 1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, 1, 1, 1, 5));
+            Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>((Array)new string[3, 3, 3, 3], 1, 1, 1, 1));
 
-            Assert.Throws<ArgumentNullException>(() => new InnerRef<int>(default(Array)!, [0, 0, 0, 0]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [-1, 1, 1, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, -1, 1, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, 1, -1, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, 1, 1, -1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [5, 1, 1, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, 5, 1, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, 1, 5, 1]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [1, 1, 1, 5]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [0, 0, 0]));
-            Assert.Throws<ArgumentException>(() => new InnerRef<int>((Array)array, [0, 0, 0, 0, 0]));
-            Assert.Throws<ArrayTypeMismatchException>(() => new InnerRef<object>((Array)new string[3, 3, 3, 3], [1, 1, 1, 1]));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, [0, 0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [-1, 1, 1, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, -1, 1, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, 1, -1, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, 1, 1, -1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [5, 1, 1, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, 5, 1, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, 1, 5, 1]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [1, 1, 1, 5]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => new Ref<int>((Array)array, [0, 0, 0, 0, 0]));
+            Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>((Array)new string[3, 3, 3, 3], [1, 1, 1, 1]));
 
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -866,8 +871,8 @@ public class InnerRefTests
     {
         ClassA classA = new();
 
-        InnerOffset<ClassA, int> offset = new(e => e.c);
-        InnerRef<int> reference = offset.From(classA);
+        Offset<ClassA, int> offset = new(e => e.c);
+        Ref<int> reference = offset.From(classA);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref classA.c));
         reference = offset.FromObject(classA);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref classA.c));
@@ -879,14 +884,32 @@ public class InnerRefTests
         reference = offset.FromObject(classA);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref classA.c));
 
-        Assert.Throws<ArgumentException>(() => new InnerOffset<ClassA, float>(fieldInfo));
-        Assert.Throws<ArgumentException>(() => new InnerOffset<StructA, int>(fieldInfo));
-        Assert.Throws<ArgumentNullException>(() => new InnerOffset<ClassA, int>(default(FieldInfo)!));
+        Assert.Throws<ArgumentException>(() => new Offset<ClassA, float>(fieldInfo));
+        Assert.Throws<ArgumentException>(() => new Offset<StructA, int>(fieldInfo));
+        Assert.Throws<ArgumentNullException>(() => new Offset<ClassA, int>(default(FieldInfo)!));
 
         Assert.Throws<ArgumentNullException>(() => offset.From(null!));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
         Assert.Throws<ArgumentException>(() => offset.FromObject(new object()));
         Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref classA));
+
+        Offset<ClassA, string?> offset_ = new(e => e.d);
+        Ref<string?> reference_ = offset_.From(classA);
+        Assert.True(Unsafe.AreSame(ref reference_.Value, ref classA.d));
+        reference_ = offset_.FromObject(classA);
+        Assert.True(Unsafe.AreSame(ref reference_.Value, ref classA.d));
+
+        FieldInfo fieldInfo_ = typeof(ClassA).GetField("d", BindingFlags.Public | BindingFlags.Instance);
+        offset_ = new(fieldInfo_);
+        reference_ = offset_.From(classA);
+        Assert.True(Unsafe.AreSame(ref reference_.Value, ref classA.d));
+        reference_ = offset_.FromObject(classA);
+        Assert.True(Unsafe.AreSame(ref reference_.Value, ref classA.d));
+
+        Assert.Throws<ArgumentNullException>(() => offset_.From(null!));
+        Assert.Throws<ArgumentNullException>(() => offset_.FromObject(null!));
+        Assert.Throws<ArgumentException>(() => offset_.FromObject(new object()));
+        Assert.Throws<InvalidOperationException>(() => offset_.FromRef(ref classA));
     }
 
     [Fact]
@@ -895,8 +918,8 @@ public class InnerRefTests
         StructA structA = new StructA() { c = 1 };
         object boxed = structA;
 
-        InnerOffset<StructA, int> offset = new(e => e.c);
-        InnerRef<int> reference = offset.FromObject(boxed);
+        Offset<StructA, int> offset = new(e => e.c);
+        Ref<int> reference = offset.FromObject(boxed);
 #if NET5_0_OR_GREATER
         Assert.True(Unsafe.AreSame(ref reference.Value, ref Unsafe.Unbox<StructA>(boxed).c));
 #endif
@@ -914,9 +937,9 @@ public class InnerRefTests
         reference_ = ref offset.FromRef(ref structA);
         Assert.True(Unsafe.AreSame(ref reference_, ref structA.c));
 
-        Assert.Throws<ArgumentException>(() => new InnerOffset<StructA, float>(fieldInfo));
-        Assert.Throws<ArgumentException>(() => new InnerOffset<ClassA, int>(fieldInfo));
-        Assert.Throws<ArgumentNullException>(() => new InnerOffset<StructA, int>(default(FieldInfo)!));
+        Assert.Throws<ArgumentException>(() => new Offset<StructA, float>(fieldInfo));
+        Assert.Throws<ArgumentException>(() => new Offset<ClassA, int>(fieldInfo));
+        Assert.Throws<ArgumentNullException>(() => new Offset<StructA, int>(default(FieldInfo)!));
 
         Assert.Throws<InvalidOperationException>(() => offset.From(default));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -932,8 +955,8 @@ public class InnerRefTests
 
         object boxedValueArray = valueArray;
 
-        InnerOffset<ValueArray<int>, int> offset = new(2);
-        InnerRef<int> reference = offset.FromObject(boxedValueArray);
+        Offset<ValueArray<int>, int> offset = new(2);
+        Ref<int> reference = offset.FromObject(boxedValueArray);
 #if NET5_0_OR_GREATER
         Assert.True(Unsafe.AreSame(ref reference.Value, ref Unsafe.Unbox<ValueArray<int>>(boxedValueArray)[2]));
 #endif
@@ -950,10 +973,12 @@ public class InnerRefTests
         reference_ = ref offset.FromRef(ref valueArray);
         Assert.True(Unsafe.AreSame(ref reference_, ref valueArray[2]));
 
-        Assert.Throws<ArgumentException>(() => new InnerOffset<ValueArray<int>, int>([]));
-        Assert.Throws<ArgumentException>(() => new InnerOffset<ValueArray<int>, int>([0, 0]));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InnerOffset<ValueArray<int>, int>([-1]));
-        Assert.Throws<ArgumentException>(() => new InnerOffset<ValueArray<int>, int>([6]));
+        Assert.Throws<ArgumentException>(() => new Offset<ValueArray<int>, int>([]));
+        Assert.Throws<ArgumentException>(() => new Offset<ValueArray<int>, int>([0, 0]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<ValueArray<int>, int>([-1]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<ValueArray<int>, int>(-1));
+        Assert.Throws<ArgumentException>(() => new Offset<ValueArray<int>, int>([6]));
+        Assert.Throws<ArgumentException>(() => new Offset<ValueArray<int>, int>(6));
 
         Assert.Throws<InvalidOperationException>(() => offset.From(default));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
@@ -965,6 +990,7 @@ internal class ClassA
 {
     public int b;
     public int c;
+    public string? d;
 }
 
 internal struct StructA
@@ -981,21 +1007,22 @@ internal struct ValueArray<T>
 }
 #endif
 
-internal class MemoryWrapper<T>(Memory<T> memory) : MemoryManager<T>
+internal class MemoryWrapper<T>(Memory<T> memory) : IMemoryOwner<T>
 {
-    public override Span<T> GetSpan() => memory.Span;
+    public Memory<T> Memory => memory;
 
-    public override MemoryHandle Pin(int elementIndex = 0)
+    public void Dispose()
     {
         throw new NotImplementedException();
     }
+}
 
-    public override void Unpin()
+internal struct MemoryWrapper_<T>(Memory<T> memory) : IMemoryOwner<T>
+{
+    public Memory<T> Memory => memory;
+
+    public void Dispose()
     {
         throw new NotImplementedException();
-    }
-
-    protected override void Dispose(bool disposing)
-    {
     }
 }

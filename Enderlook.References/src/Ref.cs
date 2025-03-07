@@ -7,10 +7,11 @@ using System.Runtime.InteropServices;
 namespace Enderlook.References;
 
 /// <summary>
-/// Represent an inner reference to an allocation.
+/// Represent a reference to an allocation.<br/>
+/// It also support inner references or pointers.
 /// </summary>
-/// <typeparam name="T">Type of the inner reference.</typeparam>
-public readonly struct InnerRef<T>
+/// <typeparam name="T">Type of the reference.</typeparam>
+public readonly struct Ref<T>
 {
     private readonly object? _owner;
     private readonly nint _unmanaged;
@@ -20,6 +21,7 @@ public readonly struct InnerRef<T>
     /// Get reference to the value.
     /// </summary>
     /// <exception cref="ArgumentException">Thrown when reference is backed by <see cref="IMemoryOwner{T}"/> and it changed its span's length to a lower one that the index of this reference.</exception>
+    /// <exception cref="Exception">May be thrown by <see cref="ReferenceProvider{TResult}.Invoke(object?, nint)"/> if the instance was constructed with one of them.</exception>
     public readonly unsafe ref T Value
     {
         get
@@ -93,12 +95,12 @@ public readonly struct InnerRef<T>
     }
 
     /// <summary>
-    /// Creates an internal reference from a pointer.
+    /// Creates an reference from a pointer.
     /// </summary>
     /// <param name="pointer">Pointer to make the reference.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="pointer"/> is zero.</exception>
 #pragma warning disable CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
-    public unsafe InnerRef(T* pointer)
+    public unsafe Ref(T* pointer)
 #pragma warning restore CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
     {
         if (pointer == null)
@@ -115,7 +117,7 @@ public readonly struct InnerRef<T>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="memoryManager"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is negative.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="index"/> is equal or greater than <paramref name="memoryManager"/>'s span's length.</exception>
-    public unsafe InnerRef(IMemoryOwner<T> memoryManager, int index)
+    public unsafe Ref(IMemoryOwner<T> memoryManager, int index)
     {
         if (memoryManager is null)
             Utils.ThrowArgumentNullException_IMemoryOwner();
@@ -137,7 +139,7 @@ public readonly struct InnerRef<T>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is negative.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="index"/> is equal or greater than <paramref name="array"/>'s length.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/>'s actual element type is a reference type, but doesn't match with <typeparamref name="T"/> type.</exception>
-    public InnerRef(T[] array, int index)
+    public Ref(T[] array, int index)
     {
         if (array is null)
             Utils.ThrowArgumentNullException_Array();
@@ -161,7 +163,7 @@ public readonly struct InnerRef<T>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is negative.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="index"/> is equal or greater than <paramref name="memory"/>'s length.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="memory"/>'s actual element type is a reference type, but doesn't match with <typeparamref name="T"/> type.</exception>
-    public InnerRef(Memory<T> memory, int index)
+    public Ref(Memory<T> memory, int index)
     {
         if (index < 0)
             Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
@@ -178,9 +180,9 @@ public readonly struct InnerRef<T>
     /// <param name="segment">Array to take a reference.</param>
     /// <param name="index">Index of element to take.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is negative.</exception>
-    /// <exception cref="ArgumentException">Thrown when <see cref="ArraySegment{T}.Array"/> of <paramref name="segment"/> is <see langword="null"/>, or <paramref name="index"/> is equal or greater than <paramref name="segment"/>'s length.</exception>
+    /// <exception cref="ArgumentException">Thrown when <see cref="ArraySegment{T}.Array"/> of <paramref name="segment"/> is <see langword="null"/>, or <paramref name="index"/> is equal or greater than <paramref name="segment"/>'s count.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="segment"/>'s actual element type is a reference type, but doesn't match with <typeparamref name="T"/> type.</exception>
-    public InnerRef(ArraySegment<T> segment, int index)
+    public Ref(ArraySegment<T> segment, int index)
     {
         if (segment.Array is null)
             Utils.ThrowArgumentException_SegmentArrayIsNull();
@@ -204,7 +206,7 @@ public readonly struct InnerRef<T>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="index1"/> or <paramref name="index2"/> is out of <paramref name="array"/> bounds.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/>'s actual element type is a reference type, but doesn't match with <typeparamref name="T"/> type.</exception>
-    public InnerRef(T[,] array, int index1, int index2)
+    public Ref(T[,] array, int index1, int index2)
     {
         if (array is null)
             Utils.ThrowArgumentNullException_Array();
@@ -230,11 +232,10 @@ public readonly struct InnerRef<T>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="index1"/>, <paramref name="index2"/> or <paramref name="index3"/> is out of <paramref name="array"/> bounds.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/>'s actual element type is a reference type, but doesn't match with <typeparamref name="T"/> type.</exception>
-    public InnerRef(T[,,] array, int index1, int index2, int index3)
+    public Ref(T[,,] array, int index1, int index2, int index3)
     {
         if (array is null)
             Utils.ThrowArgumentNullException_Array();
-        int lowerBound1 = array.GetLowerBound(0);
         if (!typeof(T).IsValueType && array.GetType() != typeof(T[,]))
             Utils.ThrowArrayTypeMismatchException_Segment();
 
@@ -258,7 +259,7 @@ public readonly struct InnerRef<T>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="array"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="index1"/>, <paramref name="index2"/>, <paramref name="index3"/> or <paramref name="index4"/> is out of <paramref name="array"/> bounds.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <paramref name="array"/>'s actual element type is a reference type, but doesn't match with <typeparamref name="T"/> type.</exception>
-    public InnerRef(T[,,,] array, int index1, int index2, int index3, int index4)
+    public Ref(T[,,,] array, int index1, int index2, int index3, int index4)
     {
         if (array is null)
             Utils.ThrowArgumentNullException_Array();
@@ -283,7 +284,7 @@ public readonly struct InnerRef<T>
     /// <exception cref="ArgumentException">Thrown when indexes are out of range.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="indexes"/> length doesn't match <paramref name="array"/>'s rank or indexes are out of bounds.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="array"/> is a single-dimensional zero-based index and <paramref name="indexes"/> only value is negative.</exception>
-    public unsafe InnerRef(Array array, params ReadOnlySpan<int> indexes)
+    public unsafe Ref(Array array, params ReadOnlySpan<int> indexes)
     {
         if (array is null)
             Utils.ThrowArgumentNullException_Array();
@@ -349,7 +350,7 @@ public readonly struct InnerRef<T>
     /// <param name="unmanagedState">Unmanaged state to pass to the delegate.</param>
     /// <param name="referenceProvider">Delegate which wraps the method that produces a reference.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="referenceProvider"/> is <see langword="null"/>.</exception>
-    public InnerRef(object managedState, nint unmanagedState, ReferenceProvider<T> referenceProvider)
+    public Ref(object managedState, nint unmanagedState, ReferenceProvider<T> referenceProvider)
     {
         if (referenceProvider is null) Utils.ThrowArgumentNullException_ReferenceProvider();
 
@@ -359,7 +360,7 @@ public readonly struct InnerRef<T>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal InnerRef(object? owner, nint unmanaged, object? managed)
+    internal Ref(object? owner, nint unmanaged, object? managed)
     {
         _owner = owner;
         _unmanaged = unmanaged;
@@ -367,23 +368,23 @@ public readonly struct InnerRef<T>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static InnerRef<T> CreateUnsafe(object? owner, nint unmanaged, object? managed) => new(owner, unmanaged, managed);
+    internal static Ref<T> CreateUnsafe(object? owner, nint unmanaged, object? managed) => new(owner, unmanaged, managed);
 
     /// <summary>
-    /// Reads the inner reference.
+    /// Reads the reference.
     /// </summary>
     /// <param name="self">Reference to read.</param>
     /// <exception cref="ArgumentException">Thrown when reference is backed by <see cref="IMemoryOwner{T}"/> and it changed its span's length to a lower one that the index of this reference.</exception>
     /// <exception cref="NullReferenceException">Thrown when instance is <see langword="default"/>.</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static implicit operator T(InnerRef<T> self) => self.Value;
+    public static implicit operator T(Ref<T> self) => self.Value;
 
     /// <summary>
-    /// Convert a pointer into an inner reference.
+    /// Convert a pointer into a reference.
     /// </summary>
     /// <param name="pointer">Pointer to convert.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #pragma warning disable CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
-    public unsafe static implicit operator InnerRef<T>(T* pointer) => new(pointer);
+    public unsafe static implicit operator Ref<T>(T* pointer) => new(pointer);
 #pragma warning restore CS8500 // This takes the address of, gets the size of, or declares a pointer to a managed type
 }

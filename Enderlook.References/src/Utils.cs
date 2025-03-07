@@ -285,8 +285,8 @@ internal static partial class Utils
     public static void ThrowArgumentException_IndexOutOfBounds()
         => throw new ArgumentException("Index outside inline array's bounds.", "index");
 
-    public static void ThrowArgumentException_IndexOutOfBounds(IndexOutOfRangeException exception)
-        => throw new ArgumentException("array", exception);
+    public static void ThrowArgumentException_InlineArrayElementTypeMismatch()
+        => throw new ArgumentException("Inline array's element type is not the same as TReference.");
 
     public static void ThrowArgumentException_InvalidExpression()
         => throw new ArgumentException(
@@ -323,8 +323,8 @@ internal static partial class Utils
     public static void ThrowArgumentException_SegmentArrayIsNull()
         => throw new ArgumentException("Segment array is null.", "segment");
 
-    public static void ThrowArgumentException_SingleIndexRequiredForIMemoryOwnerMemoryOrArraySegment()
-        => throw new ArgumentException("Only indexes's of length 1 are allowed when TOwner is a IMemoryOwner<T>, Memory<T> or ArraySegment<T>.", "indexes");
+    public static void ThrowArgumentException_SingleIndexRequiredForMemoryOrArraySegmentOrIMemoryOwnerOrInlineArray()
+        => throw new ArgumentException("Only indexes's of length 1 are allowed when TOwner is a Memory<T>, an ArraySegment<T>, a type assignable to IMemoryOwner<T> or a type with the attribute InlineArrayAttribute.", "indexes");
 
     public static void ThrowArgumentException_TOwnerIndexesLengthDoesNotMatchRank()
         => throw new ArgumentException("indexes", "TOwner generic parameter is an array whose rank doesn't matches with indexes length.");
@@ -377,7 +377,7 @@ internal static partial class Utils
         => throw new InvalidOperationException("TRefence generic parameter must be a value type.");
 
     public static void ThrowInvalidOperationException_OnlyArrayOrIMemoryOwner()
-        => throw new InvalidOperationException("TOwner generic parameter is not an array whose element type is TReference nor a IMemoryOwner<TReference>.");
+        => throw new InvalidOperationException("TOwner generic parameter is not an array whose element type is TReference, a Memory<TReference>, an ArraySegment<TReference>, a type assignable to IMemoryOwner<TReference> or a type with the attribute InlineArrayAttribute.");
 
     public static void ThrowNotImplementedException()
         => throw new NotImplementedException("Runtime doesn't support specified operation.");
