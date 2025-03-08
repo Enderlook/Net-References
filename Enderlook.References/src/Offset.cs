@@ -177,11 +177,11 @@ public sealed class Offset<TOwner, TReference>
     }
 
     /// <summary>
-    /// Creates an offset to an specific index of an <see cref="Array"/>, <see cref="ArraySegment{T}"/>, <see cref="Memory{T}"/> or <see cref="IMemoryOwner{T}"/>.
+    /// Creates an offset to an specific index of an <see cref="Array"/>, <see cref="ArraySegment{T}"/>, <see cref="Memory{T}"/>, <see cref="ReadOnlyMemory{T}"/>, or <see cref="IMemoryOwner{T}"/>.
     /// </summary>
     /// <param name="index">Index of the element to get its reference.</param>
     /// <exception cref="ArrayTypeMismatchException">Throw when <typeparamref name="TOwner"/> is an array and <see cref="Type.GetElementType"/> is not <typeparamref name="TReference"/>, unless <typeparamref name="TOwner"/> is <see cref="Array"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <typeparamref name="TOwner"/> is a single-dimensional zero-bound array, <see cref="IMemoryOwner{T}"/>, <see cref="Memory{T}"/>, <see cref="ArraySegment{T}"/>, or inline array, and <paramref name="index"/> is negative.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <typeparamref name="TOwner"/> is a single-dimensional zero-bound array, <see cref="IMemoryOwner{T}"/>, <see cref="Memory{T}"/>, <see cref="ReadOnlyMemory{T}"/>, <see cref="ArraySegment{T}"/>, or inline array, and <paramref name="index"/> is negative.</exception>
     /// <exception cref="RankException">Thrown when <typeparamref name="TOwner"/> is an array whose <see cref="Type.GetArrayRank"/> is not 1.</exception>
     /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="TOwner"/> is array whose element type is not <typeparamref name="TReference"/> or a <see cref="IMemoryOwner{T}"/> whose generic argument is not <typeparamref name="TReference"/>.</exception>
     public Offset(int index)
@@ -198,6 +198,12 @@ public sealed class Offset<TOwner, TReference>
             if (typeof(TOwner) == typeof(Memory<TReference>))
             {
                 _mode = Mode.Memory;
+                goto checkNegativeIndex;
+            }
+
+            if (typeof(TOwner) == typeof(ReadOnlyMemory<TReference>))
+            {
+                _mode = Mode.ReadOnlyMemory;
                 goto checkNegativeIndex;
             }
 
@@ -267,11 +273,11 @@ public sealed class Offset<TOwner, TReference>
     }
 
     /// <summary>
-    /// Creates an offset to an specific location of an <see cref="Array"/>, <see cref="ArraySegment{T}"/>, <see cref="Memory{T}"/> or <see cref="MemoryManager{T}"/>.
+    /// Creates an offset to an specific location of an <see cref="Array"/>, <see cref="ArraySegment{T}"/>, <see cref="Memory{T}"/>, <see cref="ReadOnlyMemory{T}"/> or <see cref="MemoryManager{T}"/>.
     /// </summary>
     /// <param name="indexes">Indexes of the element to get its reference.</param>
     /// <exception cref="ArrayTypeMismatchException">Throw when <typeparamref name="TOwner"/> is an array and <see cref="Type.GetElementType"/> is not <typeparamref name="TReference"/>, unless <typeparamref name="TOwner"/> is <see cref="Array"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <typeparamref name="TOwner"/> is a single-dimensional zero-bound array, <see cref="IMemoryOwner{T}"/>, <see cref="Memory{T}"/>, or <see cref="ArraySegment{T}"/>, and <paramref name="indexes"/> only element is negative.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <typeparamref name="TOwner"/> is a single-dimensional zero-bound array, <see cref="IMemoryOwner{T}"/>, <see cref="Memory{T}"/>, <see cref="ReadOnlyMemory{T}"/>, or <see cref="ArraySegment{T}"/>, and <paramref name="indexes"/> only element is negative.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="indexes"/> length doesn't match <see cref="Type.GetArrayRank"/> when <typeparamref name="TOwner"/> is an array, or 1 when is an <see cref="MemoryManager{T}"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="TOwner"/> is array whose element type is not <typeparamref name="TReference"/> or a <see cref="IMemoryOwner{T}"/> whose generic argument is not <typeparamref name="TReference"/>.</exception>
     public Offset(params ReadOnlySpan<int> indexes)
@@ -282,6 +288,12 @@ public sealed class Offset<TOwner, TReference>
             if (typeof(TOwner) == typeof(Memory<TReference>))
             {
                 _mode = Mode.Memory;
+                goto getNegativeSingleIndex;
+            }
+
+            if (typeof(TOwner) == typeof(ReadOnlyMemory<TReference>))
+            {
+                _mode = Mode.ReadOnlyMemory;
                 goto getNegativeSingleIndex;
             }
 
@@ -426,9 +438,97 @@ public sealed class Offset<TOwner, TReference>
             if (_mode != Mode.IMemoryOwner)
                 goto error;
         }
-        return FromObjectUnsafe(owner);
+        return new(FromObjectUnsafe<TOwner, No>(owner));
     error:
-        Utils.ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions();
+        Utils.ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions<No>();
+        return default;
+    }
+
+    /// <summary>
+    /// Creates an inner reference for the specified owner.
+    /// </summary>
+    /// <param name="owner">Owner where reference point to.</param>
+    /// <returns>Inner reference.</returns>
+    /// <exception cref="ArgumentException">Thrown when the offset is an index from an <see cref="Array"/>, <see cref="ArraySegment{T}"/> or <see cref="IMemoryOwner{T}"/> and is out of bounds, or <see cref="ArraySegment{T}.Array"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArrayTypeMismatchException">Thrown when the offset is an index from an <see cref="Array"/> but the provided array runtime type doesn't match <typeparamref name="TOwner"/>.</exception>
+    /// <exception cref="InvalidOperationException">Throw when <typeparamref name="TOwner"/> is a value type and the offset is not an element index of a <see cref="Memory{T}"/>, a <see cref="ReadOnlyMemory{T}"/>, an <see cref="ArraySegment{T}"/> nor from a type assignable to <see cref="IMemoryOwner{T}"/>.</exception>
+    public ReadOnlyRef<TReference> FromReadOnly(TOwner owner)
+    {
+        if (owner is null)
+            Utils.ThrowArgumentNullException_Owner();
+        if (typeof(TOwner).IsValueType)
+        {
+            if (typeof(TOwner) == typeof(Memory<TReference>))
+            {
+                if (_mode != Mode.Memory)
+                    goto error;
+            }
+            else if (typeof(TOwner) == typeof(ReadOnlyMemory<TReference>))
+            {
+                if (_mode != Mode.ReadOnlyMemory)
+                    goto error;
+            }
+            else if (typeof(TOwner) == typeof(ArraySegment<TReference>))
+            {
+                if (_mode != Mode.ArraySegment)
+                    goto error;
+            }
+            else if (typeof(IMemoryOwner<TReference>).IsAssignableFrom(typeof(TOwner)))
+            {
+                if (_mode != Mode.IMemoryOwner)
+                    goto error;
+            }
+            else
+                goto error;
+        }
+        else if (typeof(IMemoryOwner<TReference>).IsAssignableFrom(typeof(TOwner)))
+        {
+            if (_mode != Mode.IMemoryOwner)
+                goto error;
+        }
+        return new(FromObjectUnsafe<TOwner, Yes>(owner));
+    error:
+        Utils.ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions<Yes>();
+        return default;
+    }
+
+    private Ref<TReference, TReadOnly> From<TReadOnly>(TOwner owner)
+    {
+        if (owner is null)
+            Utils.ThrowArgumentNullException_Owner();
+        if (typeof(TOwner).IsValueType)
+        {
+            if (typeof(TOwner) == typeof(Memory<TReference>))
+            {
+                if (_mode != Mode.Memory)
+                    goto error;
+            }
+            else if (Utils.IsToggled<TReadOnly>() && typeof(TOwner) == typeof(ReadOnlyMemory<TReference>))
+            {
+                if (_mode != Mode.ReadOnlyMemory)
+                    goto error;
+            }
+            else if (typeof(TOwner) == typeof(ArraySegment<TReference>))
+            {
+                if (_mode != Mode.ArraySegment)
+                    goto error;
+            }
+            else if (typeof(IMemoryOwner<TReference>).IsAssignableFrom(typeof(TOwner)))
+            {
+                if (_mode != Mode.IMemoryOwner)
+                    goto error;
+            }
+            else
+                goto error;
+        }
+        else if (typeof(IMemoryOwner<TReference>).IsAssignableFrom(typeof(TOwner)))
+        {
+            if (_mode != Mode.IMemoryOwner)
+                goto error;
+        }
+        return FromObjectUnsafe<TOwner, TReadOnly>(owner);
+    error:
+        Utils.ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions<TReadOnly>();
         return default;
     }
 
@@ -445,7 +545,23 @@ public sealed class Offset<TOwner, TReference>
             Utils.ThrowArgumentNullException_Owner();
         if (!typeof(TOwner).IsAssignableFrom(owner.GetType()))
             Utils.ThrowArgumentException_OwnerTypeDoesNotMatch();
-        return FromObjectUnsafe(owner);
+        return new(FromObjectUnsafe<object, No>(owner));
+    }
+
+    /// <summary>
+    /// Creates an inner reference for the specified owner, supports boxed value types.
+    /// </summary>
+    /// <param name="owner">Owner where reference point to.</param>
+    /// <returns>Inner reference.</returns>
+    /// <exception cref="ArgumentException">Thrown when the type of <paramref name="owner"/> is not assignable to <typeparamref name="TOwner"/>, the offset is an index from an <see cref="Array"/>, <see cref="ArraySegment{T}"/> or <see cref="IMemoryOwner{T}"/> and is out of bounds, or <see cref="ArraySegment{T}.Array"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArrayTypeMismatchException">Thrown when the offset is an index from an <see cref="Array"/> but the provided array runtime type doesn't match <typeparamref name="TOwner"/>.</exception>
+    public ReadOnlyRef<TReference> FromReadOnlyObject(object owner)
+    {
+        if (owner is null)
+            Utils.ThrowArgumentNullException_Owner();
+        if (!typeof(TOwner).IsAssignableFrom(owner.GetType()))
+            Utils.ThrowArgumentException_OwnerTypeDoesNotMatch();
+        return new(FromObjectUnsafe<object, Yes>(owner));
     }
 
     /// <summary>
@@ -456,7 +572,19 @@ public sealed class Offset<TOwner, TReference>
     /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="TOwner"/> is not a value type.</exception>
     /// <exception cref="ArgumentException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/> is <see langword="null"/>, or is an offset from an <see cref="ArraySegment{T}"/> or a <see cref="Memory{T}"/> and index is out of range.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/>'s <see cref="Type.GetElementType()"/> is not <typeparamref name="TReference"/>.</exception>
-    public unsafe ref TReference FromRef(ref TOwner owner)
+    public unsafe ref TReference FromRef(ref TOwner owner) => ref FromRefUnsafe<No>(ref owner);
+
+    /// <summary>
+    /// Creates an inner reference for the specified owner, only valid for value types.
+    /// </summary>
+    /// <param name="owner">Owner where reference point to.</param>
+    /// <returns>Inner reference.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="TOwner"/> is not a value type.</exception>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/> is <see langword="null"/>, or is an offset from a <see cref="ArraySegment{T}"/> or <see cref="Memory{T}"/> and index is out of range.</exception>
+    /// <exception cref="ArrayTypeMismatchException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/>'s <see cref="Type.GetElementType()"/> is not <typeparamref name="TReference"/>.</exception>
+    public unsafe ref readonly TReference FromReadOnlyRef(ref readonly TOwner owner) => ref FromRefUnsafe<Yes>(ref Unsafe.AsRef(in owner));
+
+    private unsafe ref TReference FromRefUnsafe<TReadOnly>(ref TOwner owner)
     {
         if (!typeof(TOwner).IsValueType) Utils.ThrowInvalidOperationException_InvalidTReferenceTypeOnlyValueTypes();
         switch (_mode)
@@ -478,7 +606,7 @@ public sealed class Offset<TOwner, TReference>
                 ArraySegment<TReference> arraySegment = Unsafe.As<TOwner, ArraySegment<TReference>>(ref owner);
                 if (arraySegment.Array is null)
                     Utils.ThrowArgumentException_OwnerSegmentArrayIsNull();
-                if (!typeof(TReference).IsValueType && arraySegment.Array.GetType() != typeof(TReference[]))
+                if (!typeof(TReference).IsValueType && !Utils.IsToggled<TReadOnly>() && arraySegment.Array.GetType() != typeof(TReference[]))
                     Utils.ThrowArrayTypeMismatchException_Segment();
                 int index = _index;
                 if (index >= arraySegment.Count)
@@ -494,6 +622,11 @@ public sealed class Offset<TOwner, TReference>
             {
                 Debug.Assert(typeof(TOwner) == typeof(Memory<TReference>));
                 ref Memory<TReference> memory = ref Unsafe.As<TOwner, Memory<TReference>>(ref owner);
+                return ref FromMemory(ref memory);
+            }
+            case Mode.ReadOnlyMemory:
+            {
+                Memory<TReference> memory = MemoryMarshal.AsMemory(Unsafe.As<TOwner, ReadOnlyMemory<TReference>>(ref owner));
                 return ref FromMemory(ref memory);
             }
             case Mode.IMemoryOwner:
@@ -521,7 +654,7 @@ public sealed class Offset<TOwner, TReference>
         }
     }
 
-    internal unsafe Ref<TReference> FromObjectUnsafe<T>(T owner)
+    internal unsafe Ref<TReference, TReadOnly> FromObjectUnsafe<T, TReadOnly>(T owner)
     {
         Debug.Assert(owner is not null);
 
@@ -535,63 +668,114 @@ public sealed class Offset<TOwner, TReference>
                     FromField(owner, Unsafe.As<FieldInfo>(_payload));
                     _referenceCached = true;
                 }
-                return Ref<TReference>.CreateUnsafe(owner, default, _referencePayload);
+                return new(owner, default, _referencePayload);
             }
             case Mode.SingleZeroArray:
             {
-                if (!typeof(TReference).IsValueType && owner.GetType() != typeof(TReference[]))
+                if (!typeof(TReference).IsValueType && !Utils.IsToggled<TReadOnly>() && owner.GetType() != typeof(TReference[]))
                     Utils.ThrowArrayTypeMismatchException_Array();
                 Debug.Assert(owner is TReference[]);
                 TReference[] array = Unsafe.As<TReference[]>(owner);
                 int index = _index;
                 if (index >= array.Length)
                     Utils.ThrowArgumentException_OwnerLengthMustBeGreaterThanIndex();
-                return Ref<TReference>.CreateUnsafe(owner, index, default);
+                // Specify `default` type in order to chose correct overload.
+                return new(owner, index, default(object));
             }
             case Mode.ArraySegment:
             {
                 Debug.Assert(owner is ArraySegment<TReference>);
+#if NET5_0_OR_GREATER
+                scoped ref ArraySegment<TReference> arraySegmentRef = ref Unsafe.NullRef<ArraySegment<TReference>>();
+#else
                 ArraySegment<TReference> arraySegment;
+                scoped ref ArraySegment<TReference> arraySegmentRef = ref Unsafe.AsRef<ArraySegment<TReference>>(null);
+#endif
                 if (typeof(T).IsValueType)
                 {
                     Debug.Assert(typeof(T) == typeof(ArraySegment<TReference>));
-                    arraySegment = Unsafe.As<T, ArraySegment<TReference>>(ref owner);
+                    arraySegmentRef = ref Unsafe.As<T, ArraySegment<TReference>>(ref owner);
                 }
                 else
+                {
+#if NET5_0_OR_GREATER
+                    arraySegmentRef = ref Unsafe.Unbox<ArraySegment<TReference>>(owner);
+#else
                     arraySegment = (ArraySegment<TReference>)(object)owner;
-                if (arraySegment.Array is null)
+                    arraySegmentRef = ref arraySegment;
+#endif
+                }
+                TReference[]? array = arraySegmentRef.Array;
+                if (array is null)
                     Utils.ThrowArgumentException_OwnerSegmentArrayIsNull();
-                if (!typeof(TReference).IsValueType && arraySegment.Array.GetType() != typeof(TReference[]))
+                if (!typeof(TReference).IsValueType && !Utils.IsToggled<TReadOnly>() && array.GetType() != typeof(TReference[]))
                     Utils.ThrowArrayTypeMismatchException_Segment();
                 int index = _index;
-                if (index >= arraySegment.Count)
+                if (index >= arraySegmentRef.Count)
                     Utils.ThrowArgumentException_OwnerCountMustBeGreaterThanIndex();
-                return Ref<TReference>.CreateUnsafe(arraySegment.Array, index + arraySegment.Offset, default);
+                // Specify `default` type in order to chose correct overload.
+                return new(array, index + arraySegmentRef.Offset, default(object));
             }
             case Mode.Memory:
             {
-                Debug.Assert(owner is Memory<TReference>);
+                Memory<TReference> memory;
+#if NET5_0_OR_GREATER
+                scoped ref Memory<TReference> memoryRef = ref Unsafe.NullRef<Memory<TReference>>();
+#else
+                scoped ref Memory<TReference> memoryRef = ref Unsafe.AsRef<Memory<TReference>>(null);
+#endif
+
                 if (typeof(T).IsValueType)
                 {
                     Debug.Assert(typeof(T) == typeof(Memory<TReference>));
-                    ref Memory<TReference> memory = ref Unsafe.As<T, Memory<TReference>>(ref owner);
+                    memoryRef = ref Unsafe.As<T, Memory<TReference>>(ref owner);
                     int index = _index;
-                    if (index >= memory.Length)
+                    if (index >= memoryRef.Length)
                         Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
-                    return Ref<TReference>.CreateUnsafe(new MemoryWrapper<TReference>(memory), index | int.MinValue, default);
+                    // Specify `default` type in order to chose correct overload.
+                    return new(new MemoryWrapper<TReference>(memoryRef), index | int.MinValue, default(object));
                 }
                 else
                 {
                     Debug.Assert(owner is Memory<TReference>);
 #if NET5_0_OR_GREATER
-                    ref Memory<TReference> memory = ref Unsafe.Unbox<Memory<TReference>>(owner);
+                    memoryRef = ref Unsafe.Unbox<Memory<TReference>>(owner);
 #else
-                    Memory<TReference> memory = (Memory<TReference>)(object)owner;
+                    memory = (Memory<TReference>)(object)owner;
+                    memoryRef = ref memory;
+#endif
+                    int index = _index;
+                    if (index >= memoryRef.Length)
+                        Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
+                    // Specify `default` type in order to chose correct overload.
+                    return new(owner, index | int.MinValue, default(object));
+                }
+            }
+            case Mode.ReadOnlyMemory when Utils.IsToggled<TReadOnly>():
+            {
+                if (typeof(T).IsValueType)
+                {
+                    Debug.Assert(typeof(T) == typeof(ReadOnlyMemory<TReference>));
+                    ReadOnlyMemory<TReference> memory = Unsafe.As<T, ReadOnlyMemory<TReference>>(ref owner);
+                    int index = _index;
+                    if (index >= memory.Length)
+                        Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
+                    // Specify `default` type in order to chose correct overload.
+                    return new(new MemoryWrapper<TReference>(MemoryMarshal.AsMemory(memory)), index | int.MinValue, default(object));
+                }
+                else
+                {
+                    Debug.Assert(owner is ReadOnlyMemory<TReference>);
+#if NET5_0_OR_GREATER
+                    ref ReadOnlyMemory<TReference> memory = ref Unsafe.Unbox<ReadOnlyMemory<TReference>>(owner);
+#else
+                    ReadOnlyMemory<TReference> memory = (Memory<TReference>)(object)owner;
 #endif
                     int index = _index;
                     if (index >= memory.Length)
                         Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
-                    return Ref<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
+                    // Specify `default` type in order to chose correct overload.
+                    return new(owner, index | int.MinValue, default(object));
                 }
             }
             case Mode.IMemoryOwner:
@@ -599,7 +783,8 @@ public sealed class Offset<TOwner, TReference>
                 int index = _index;
                 if (index >= (typeof(T).IsValueType ? ((IMemoryOwner<TReference>)owner).Memory : Unsafe.As<IMemoryOwner<TReference>>(owner).Memory).Length)
                     Utils.ThrowArgumentException_OwnerSpanLengthMustBeGreaterThanIndex();
-                return Ref<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
+                // Specify `default` type in order to chose correct overload.
+                return new(owner, index | int.MinValue, default(object));
             }
 #if NET8_0_OR_GREATER
             case Mode.InlineArray:
@@ -611,24 +796,25 @@ public sealed class Offset<TOwner, TReference>
                     _referencePayload = UnboxerHelper<TOwner>.GetElementAccessor<TReference>();
                     _referenceCached = true;
                 }
-                return Ref<TReference>.CreateUnsafe(owner, _index, _referencePayload);
+                // Specify `default` type in order to chose correct overload.
+                return new(owner, _index, (object?)_referencePayload);
             }
 #endif
             case Mode.SingleArray:
             {
-                return FromSingleArray(owner, owner.GetType());
+                return FromSingleArray<TReadOnly>(owner, owner.GetType());
             }
             case Mode.Array:
             {
                 Debug.Assert(_payload is int[]);
-                return FromMultiArray(owner, owner.GetType(), Unsafe.As<int[]>(_payload));
+                return FromMultiArray<TReadOnly>(owner, owner.GetType(), Unsafe.As<int[]>(_payload));
             }
             case Mode.SingleArrayUnkown:
             {
                 Type ownerType = owner.GetType();
                 if (ownerType.GetArrayRank() != 1)
                     Utils.ThrowArgumentException_OwnerRankDoesNotMatchIndexes();
-                return FromSingleArray(owner, ownerType);
+                return FromSingleArray<TReadOnly>(owner, ownerType);
             }
             case Mode.ArrayUnkown:
             {
@@ -638,7 +824,7 @@ public sealed class Offset<TOwner, TReference>
                 if (ownerType.GetArrayRank() != indexes.Length)
                     Utils.ThrowArgumentException_OwnerRankDoesNotMatchIndexes();
                 Debug.Assert(_payload is int[]);
-                return FromMultiArray(owner, owner.GetType(), indexes);
+                return FromMultiArray<TReadOnly>(owner, owner.GetType(), indexes);
             }
         }
         Debug.Fail("Impossible state.");
@@ -727,11 +913,19 @@ public sealed class Offset<TOwner, TReference>
         Utils.ThrowNotImplementedException();
     }
 
-    private Ref<TReference> FromSingleArray(object owner, Type ownerType)
+    private Ref<TReference, TReadOnly> FromSingleArray<TReadOnly>(object owner, Type ownerType)
     {
-        Debug.Assert(owner.GetType() == ownerType);
-        if (!typeof(TReference).IsValueType && ownerType.GetElementType()! != typeof(TReference))
-            Utils.ThrowArrayTypeMismatchException_Array();
+        Debug.Assert(ownerType.IsAssignableFrom(owner.GetType()));
+        if (!typeof(TReference).IsValueType)
+        {
+            if (Utils.IsToggled<TReadOnly>())
+            {
+                if (typeof(TReference).IsAssignableFrom(ownerType.GetElementType()))
+                    Utils.ThrowArrayTypeMismatchException_ArrayAssignable();
+            }
+            else if (ownerType.GetElementType() != typeof(TReference))
+                Utils.ThrowArrayTypeMismatchException_Array();
+        }
         Debug.Assert(owner is Array);
         Array array = Unsafe.As<Array>(owner);
         int index = _index;
@@ -739,25 +933,37 @@ public sealed class Offset<TOwner, TReference>
         if (index < lowerBound || index > array.GetUpperBound(0))
             Utils.ThrowArgumentException_OwnerIndexOutOfBounds();
 #if NET6_0_OR_GREATER
-        return Ref<TReference>.CreateUnsafe(owner, index - lowerBound, default);
+        // Specify `default` type in order to chose correct overload.
+        return new(owner, index - lowerBound, default(object));
 #else
-        return Ref<TReference>.CreateUnsafe(owner, index, default);
+        // Specify `default` type in order to chose correct overload.
+        return new(owner, index, default(object));
 #endif
     }
 
-    private static Ref<TReference> FromMultiArray(object owner, Type ownerType, int[] indexes)
+    private static Ref<TReference, TReadOnly> FromMultiArray<TReadOnly>(object owner, Type ownerType, int[] indexes)
     {
-        Debug.Assert(owner.GetType() == ownerType);
-        if (!typeof(TReference).IsValueType && ownerType.GetElementType() != typeof(TReference))
-            Utils.ThrowArrayTypeMismatchException_Array();
+        Debug.Assert(ownerType.IsAssignableFrom(owner.GetType()));
+        if (!typeof(TReference).IsValueType)
+        {
+            if (Utils.IsToggled<TReadOnly>())
+            {
+                if (typeof(TReference).IsAssignableFrom(ownerType.GetElementType()))
+                    Utils.ThrowArrayTypeMismatchException_ArrayAssignable();
+            }
+            else if (ownerType.GetElementType() != typeof(TReference))
+                Utils.ThrowArrayTypeMismatchException_Array();
+        }
         Debug.Assert(owner is Array);
         Array array = Unsafe.As<Array>(owner);
 #if NET6_0_OR_GREATER
         int index = Utils.CalculateIndex(array, indexes);
-        return Ref<TReference>.CreateUnsafe(owner, index, default);
+        // Specify `default` type in order to chose correct overload.
+        return new(owner, index, default(object));
 #else
         Utils.CheckBounds(array, indexes);
-        return Ref<TReference>.CreateUnsafe(owner, default, indexes);
+        // Specify `default` type in order to chose correct overload.
+        return new(owner, default, (object)indexes);
 #endif
     }
 
@@ -836,6 +1042,18 @@ public static class Offset
         if (index < 0)
             Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
         return new(Mode.Memory, default, index);
+    }
+
+    /// <summary>
+    /// Creates an offset to an specific index of an <see cref="ReadOnlyMemory{T}"/>.
+    /// </summary>
+    /// <param name="index">Index of the element to get its reference.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is negative.</exception>
+    public static Offset<ReadOnlyMemory<TReference>, TReference> ForReadOnlyMemoryElement<TReference>(int index)
+    {
+        if (index < 0)
+            Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
+        return new(Mode.ReadOnlyMemory, default, index);
     }
 
     /// <summary>

@@ -33,6 +33,39 @@ public readonly struct Ref<T>
 
     /// Convert a pointer into an reference.
     public unsafe static implicit operator Ref<T>(T* pointer);
+	
+	/// Convert reference to readonly.
+	public static implicit operator ReadOnlyRef<T>(Ref<T> self);
+}
+
+/// Represent an reference to an allocation.
+public readonly struct ReadOnlyRef<T>
+{
+    /// Get reference to the value.
+    public readonly unsafe ref readonly T Value { get; }
+		
+    /// Creates an reference from a pointer.
+    public unsafe ReadOnlyRef(T* pointer);    
+
+    /// Creates a reference to an element of the collection.
+	public ReadOnlyRef(IMemoryOwner<T> memoryManager, int index);
+    public ReadOnlyRef(T[] array, int index);
+	public ReadOnlyRef(T[,] array, int index1, int index2);
+	public ReadOnlyRef(T[,,] array, int index1, int index2, int index3);
+	public ReadOnlyRef(T[,,,] array, int index1, int index2, int index3, int index4);
+	public unsafe ReadOnlyRef(Array array, params ReadOnlySpan<int> indexes);
+    public ReadOnlyRef(ReadOnlyMemory<T> memory, int index);
+	public ReadOnlyRef(ArraySegment<T> segment, int index);
+	
+	// Creates a wrapper around a method which returns a reference.
+	public ReadOnlyRef(object managedState, nint unmanagedState, ReadOnlyReferenceProvider<T> referenceProvider);
+	public ReadOnlyRef(object managedState, nint unmanagedState, ReferenceProvider<T> referenceProvider);
+		
+    /// Reads the inner reference.
+    public static implicit operator T(ReadOnlyRef<T> self);
+
+    /// Convert a pointer into an reference.
+    public unsafe static implicit operator ReadOnlyRef<T>(T* pointer);
 }
 
 /// Represent the offset of a managed reference.
@@ -51,12 +84,15 @@ public sealed class Offset<TOwner, TReference>
 	
     /// Creates an inner reference for the specified owner.
     public Ref<TReference> From(TOwner owner);
+    public ReadOnlyRef<TReference> FromReadOnly(TOwner owner);
 	
 	/// Creates an inner reference for the specified owner, supports boxed value types.
     public Ref<TReference> FromObject(object owner);
+    public ReadOnlyRef<TReference> FromReadOnlyObject(object owner);
 	
     /// Creates an inner reference for the specified owner, only valid for value types.
 	public unsafe ref TReference FromRef(ref TOwner owner);
+	public unsafe ref readonly TReference FromReadOnlyRef(ref TOwner owner);
 }
 
 /// Helper methods for Offset<TOwner, TReference>.
@@ -69,6 +105,7 @@ public static class Offset
     public static Offset<TReference[,,,], TReference> ForArrayElement<TReference>(int index1, int index2, int index3, int index4);
     public static Offset<ArraySegment<TReference>, TReference> ForArraySegmentElement<TReference>(int index);
     public static Offset<Memory<TReference>, TReference> ForMemoryElement<TReference>(int index);
+    public static Offset<ReadOnlyMemory<TReference>, TReference> ForReadOnlyMemoryElement<TReference>(int index);
     public static Offset<TMemoryOwner, TReference> ForIMemoryOwnerElement<TMemoryOwner, TReference>(int index)
         where TMemoryOwner : IMemoryOwner<TReference>;
     public static Offset<IMemoryOwner<TReference>, TReference> ForIMemoryOwnerElement<TReference>(int index);
@@ -77,4 +114,5 @@ public static class Offset
 
 /// Encapsulates a method that has two parameters and returns a reference.
 public delegate ref TResult ReferenceProvider<TResult>(object? managedState, nint unmanagedState);
+public delegate ref readonly TResult ReadOnlyReferenceProvider<TResult>(object? managedState, nint unmanagedState);
 ```

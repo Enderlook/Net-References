@@ -21,6 +21,7 @@ internal static partial class Utils
             [typeof(object)],
             null
         );
+    private static Array _owner;
 
 #if NET5_0_OR_GREATER
     [DynamicDependency("As", typeof(Unsafe))]
@@ -258,6 +259,13 @@ internal static partial class Utils
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsToggled<T>()
+    {
+        Debug.Assert(typeof(T) == typeof(Yes) || typeof(T) == typeof(No));
+        return typeof(T) == typeof(Yes);
+    }
+
     public static void ThrowArgumentException_ArrayIndexesOutOfBounds()
         => throw new ArgumentException("Index is outside array's bounds", "indexes");
 
@@ -367,11 +375,19 @@ internal static partial class Utils
     public static void ThrowArrayTypeMismatchException_Array()
         => throw new ArrayTypeMismatchException("Array's actual element type doesn't match with TReference.");
 
+    public static void ThrowArrayTypeMismatchException_ArrayAssignable()
+        => throw new ArrayTypeMismatchException("Array's actual element type is not assignable to TReference");
+
     public static void ThrowArrayTypeMismatchException_Segment()
         => throw new ArrayTypeMismatchException("Segment's array's actual element type doesn't match with TReference.");
 
-    public static void ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions()
-        => throw new InvalidOperationException("TOwner generic parameter must be a reference type, unless this offset is accessing an element index from Memory<TReference>, an ArraySegment<TReference> or from a type assignable to IMemoryOwner<TReference>.");
+    public static void ThrowArrayTypeMismatchException_SegmentAssignable()
+        => throw new ArrayTypeMismatchException("Segment's array's actual element type is not assignable to TReference.");
+
+    public static void ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions<TReadOnly>()
+        => throw new InvalidOperationException(IsToggled<TReadOnly>()
+            ? "TOwner generic parameter must be a reference type, unless this offset is accessing an element index from Memory<TReference>, an ArraySegment<TReference> or from a type assignable to IMemoryOwner<TReference>."
+            : "TOwner generic parameter must be a reference type, unless this offset is accessing an element index from Memory<TReference>, a ReadOnlyMemory<T>, an ArraySegment<TReference> or from a type assignable to IMemoryOwner<TReference>.");
 
     public static void ThrowInvalidOperationException_InvalidTReferenceTypeOnlyValueTypes()
         => throw new InvalidOperationException("TRefence generic parameter must be a value type.");
@@ -386,6 +402,9 @@ internal static partial class Utils
         => throw new RankException("TOwner generic parameter is an array whose rank is not one.");
 }
 
+internal struct Yes { }
+internal struct No { }
+
 internal delegate ref TResult RefFuncRef<T, TResult>(ref T arg);
 
 internal delegate ref TResult FuncArray<TResult>(object array, scoped ref int firstIndex);
@@ -399,12 +418,22 @@ internal delegate ref TResult FuncArray<TResult>(object array, scoped ref int fi
 /// <returns>The return value of the method that this delegate encapsulates.</returns>
 public delegate ref TResult ReferenceProvider<TResult>(object? managedState, nint unmanagedState);
 
+/// <summary>
+/// Encapsulates a method that has two parameters and returns a readonly reference of the type specified by the <typeparamref name="TResult"/> parameter.
+/// </summary>
+/// <typeparam name="TResult">The type of the return value of the method that this delegate encapsulates.</typeparam>
+/// <param name="managedState">The first parameter of the method that this delegate encapsulates.</param>
+/// <param name="unmanagedState">The second parameter of the method that this delegate encapsulates.</param>
+/// <returns>The return value of the method that this delegate encapsulates.</returns>
+public delegate ref readonly TResult ReadOnlyReferenceProvider<TResult>(object? managedState, nint unmanagedState);
+
 internal enum Mode
 {
     FieldInfo,
     SingleZeroArray,
     ArraySegment,
     Memory,
+    ReadOnlyMemory,
     IMemoryOwner,
     InlineArray,
     SingleArray,
