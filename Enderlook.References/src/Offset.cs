@@ -207,6 +207,12 @@ public sealed class Offset<TOwner, TReference>
                 goto checkNegativeIndex;
             }
 
+            if (typeof(TOwner) == typeof(ReadOnlySequence<TReference>))
+            {
+                _mode = Mode.ReadOnlySequence;
+                goto checkNegativeIndex;
+            }
+
 #if NET8_0_OR_GREATER
             if (typeof(TOwner).IsValueType && typeof(TOwner).GetCustomAttribute<InlineArrayAttribute>() is InlineArrayAttribute inlineArrayAttribute)
             {
@@ -300,6 +306,12 @@ public sealed class Offset<TOwner, TReference>
             if (typeof(TOwner) == typeof(ArraySegment<TReference>))
             {
                 _mode = Mode.ArraySegment;
+                goto getNegativeSingleIndex;
+            }
+
+            if (typeof(TOwner) == typeof(ReadOnlySequence<TReference>))
+            {
+                _mode = Mode.ReadOnlySequence;
                 goto getNegativeSingleIndex;
             }
 
@@ -473,6 +485,11 @@ public sealed class Offset<TOwner, TReference>
                 if (_mode != Mode.ArraySegment)
                     goto error;
             }
+            else if (typeof(TOwner) == typeof(ReadOnlySequence<TReference>))
+            {
+                if (_mode != Mode.ReadOnlySequence)
+                    goto error;
+            }
             else if (typeof(IMemoryOwner<TReference>).IsAssignableFrom(typeof(TOwner)))
             {
                 if (_mode != Mode.IMemoryOwner)
@@ -633,6 +650,40 @@ public sealed class Offset<TOwner, TReference>
             {
                 Memory<TReference> memory = ((IMemoryOwner<TReference>)owner).Memory;
                 return ref FromMemory(ref memory);
+            }
+            case Mode.ReadOnlySequence when Utils.IsToggled<TReadOnly>():
+            {
+                ReadOnlySequence<TReference> sequence;
+#if NET5_0_OR_GREATER
+                scoped ref ReadOnlySequence<TReference> sequenceRef = ref Unsafe.NullRef<ReadOnlySequence<TReference>>();
+#else
+                scoped ref ReadOnlySequence<TReference> sequenceRef = ref Unsafe.AsRef<ReadOnlySequence<TReference>>(null);
+#endif
+                if (typeof(TOwner).IsValueType)
+                {
+                    Debug.Assert(typeof(TOwner) == typeof(ReadOnlySequence<TReference>));
+                    sequenceRef = ref Unsafe.As<TOwner, ReadOnlySequence<TReference>>(ref owner);
+                }
+                else
+                {
+#if NET5_0_OR_GREATER
+                    sequenceRef = ref Unsafe.Unbox<ReadOnlySequence<TReference>>(owner);
+#else
+                    sequence = (ReadOnlySequence<TReference>)(object)owner;
+                    sequenceRef = ref sequence;
+#endif
+                }
+
+                try
+                {
+                    return ref MemoryMarshal.GetReference(sequenceRef.Slice(_index).First.Span);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    if (_index > sequenceRef.Length)
+                        Utils.ThrowArgumentException_IndexMustBeLowerThanSequenceLength();
+                    throw;
+                }
             }
 #if NET8_0_OR_GREATER
             case Mode.InlineArray:
@@ -825,6 +876,40 @@ public sealed class Offset<TOwner, TReference>
                     Utils.ThrowArgumentException_OwnerRankDoesNotMatchIndexes();
                 Debug.Assert(_payload is int[]);
                 return FromMultiArray<TReadOnly>(owner, owner.GetType(), indexes);
+            }
+            case Mode.ReadOnlySequence when Utils.IsToggled<TReadOnly>():
+            {
+                ReadOnlySequence<TReference> sequence;
+#if NET5_0_OR_GREATER
+                scoped ref ReadOnlySequence<TReference> sequenceRef = ref Unsafe.NullRef<ReadOnlySequence<TReference>>();
+#else
+                scoped ref ReadOnlySequence<TReference> sequenceRef = ref Unsafe.AsRef<ReadOnlySequence<TReference>>(null);
+#endif
+                if (typeof(T).IsValueType)
+                {
+                    Debug.Assert(typeof(T) == typeof(ReadOnlySequence<TReference>));
+                    sequenceRef = ref Unsafe.As<T, ReadOnlySequence<TReference>>(ref owner);
+                }
+                else
+                {
+#if NET5_0_OR_GREATER
+                    sequenceRef = ref Unsafe.Unbox<ReadOnlySequence<TReference>>(owner);
+#else
+                    sequence = (ReadOnlySequence<TReference>)(object)owner;
+                    sequenceRef = ref sequence;
+#endif
+                }
+
+                try
+                {
+                    return new(new MemoryWrapper<TReference>(MemoryMarshal.AsMemory(sequenceRef.Slice(_index).First)), 0, default(object));
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    if (_index > sequenceRef.Length)
+                        Utils.ThrowArgumentException_IndexMustBeLowerThanSequenceLength();
+                    throw;
+                }
             }
         }
         Debug.Fail("Impossible state.");
@@ -1054,6 +1139,18 @@ public static class Offset
         if (index < 0)
             Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
         return new(Mode.ReadOnlyMemory, default, index);
+    }
+
+    /// <summary>
+    /// Creates an offset to an specific index of an <see cref="Memory{T}"/>.
+    /// </summary>
+    /// <param name="index">Index of the element to get its reference.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is negative.</exception>
+    public static Offset<ReadOnlySequence<TReference>, TReference> ForReadOnlySequenceElement<TReference>(int index)
+    {
+        if (index < 0)
+            Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
+        return new(Mode.ReadOnlySequence, default, index);
     }
 
     /// <summary>

@@ -290,6 +290,9 @@ internal static partial class Utils
     public static void ThrowArgumentException_IndexMustBeLowerThanSegmentCount()
         => throw new ArgumentException("Index must be lower than segment's count.", "index");
 
+    public static void ThrowArgumentException_IndexMustBeLowerThanSequenceLength()
+        => throw new ArgumentException("Index must be lower than sequence's length.", "index");
+
     public static void ThrowArgumentException_IndexOutOfBounds()
         => throw new ArgumentException("Index outside inline array's bounds.", "index");
 
@@ -387,7 +390,7 @@ internal static partial class Utils
     public static void ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions<TReadOnly>()
         => throw new InvalidOperationException(IsToggled<TReadOnly>()
             ? "TOwner generic parameter must be a reference type, unless this offset is accessing an element index from Memory<TReference>, an ArraySegment<TReference> or from a type assignable to IMemoryOwner<TReference>."
-            : "TOwner generic parameter must be a reference type, unless this offset is accessing an element index from Memory<TReference>, a ReadOnlyMemory<T>, an ArraySegment<TReference> or from a type assignable to IMemoryOwner<TReference>.");
+            : "TOwner generic parameter must be a reference type, unless this offset is accessing an element index from Memory<TReference>, a ReadOnlyMemory<T>, an ArraySegment<TReference>, a ReadOnlySequence<TReference>, or from a type assignable to IMemoryOwner<TReference>.");
 
     public static void ThrowInvalidOperationException_InvalidTReferenceTypeOnlyValueTypes()
         => throw new InvalidOperationException("TRefence generic parameter must be a value type.");
@@ -440,6 +443,7 @@ internal enum Mode
     Array,
     SingleArrayUnkown,
     ArrayUnkown,
+    ReadOnlySequence,
 }
 
 internal sealed class MemoryWrapper<T>(Memory<T> memory) : IMemoryOwner<T>

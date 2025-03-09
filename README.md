@@ -106,6 +106,7 @@ public static class Offset
     public static Offset<ArraySegment<TReference>, TReference> ForArraySegmentElement<TReference>(int index);
     public static Offset<Memory<TReference>, TReference> ForMemoryElement<TReference>(int index);
     public static Offset<ReadOnlyMemory<TReference>, TReference> ForReadOnlyMemoryElement<TReference>(int index);
+	public static Offset<ReadOnlySequence<TReference>, TReference> ForReadOnlySequenceElement<TReference>(int index);
     public static Offset<TMemoryOwner, TReference> ForIMemoryOwnerElement<TMemoryOwner, TReference>(int index)
         where TMemoryOwner : IMemoryOwner<TReference>;
     public static Offset<IMemoryOwner<TReference>, TReference> ForIMemoryOwnerElement<TReference>(int index);

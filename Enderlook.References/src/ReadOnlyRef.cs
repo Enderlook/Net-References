@@ -80,6 +80,30 @@ public readonly struct ReadOnlyRef<T>
     public ReadOnlyRef(ArraySegment<T> segment, int index) => value = new(segment, index);
 
     /// <summary>
+    /// Creates a reference to an element of the <see cref="ReadOnlySequence{T}"/>.
+    /// </summary>
+    /// <param name="sequence">Array to take a reference.</param>
+    /// <param name="index">Index of element to take.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is negative.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="index"/> is equal or greater than <paramref name="sequence"/>'s length.</exception>
+    public ReadOnlyRef(ReadOnlySequence<T> sequence, int index)
+    {
+        try
+        {
+            // Specify `default` type in order to chose correct overload.
+            value = new(new MemoryWrapper<T>(MemoryMarshal.AsMemory(sequence.Slice(index).First)), 0, default(object));
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            if (index < 0)
+                Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
+            if (index > sequence.Length)
+                Utils.ThrowArgumentException_IndexMustBeLowerThanSequenceLength();
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Creates a reference to an element of the array.
     /// </summary>
     /// <param name="array">Array to take a reference.</param>
