@@ -48,6 +48,7 @@ public readonly struct Ref<T>
                 case null when unmanaged < 0:
                 {
                     int index = (int)unmanaged & ~int.MinValue;
+                    Span<T> span;
                     Memory<T> memory;
 #if NET5_0_OR_GREATER
                     scoped ref Memory<T> memoryRef = ref Unsafe.NullRef<Memory<T>>();
@@ -57,6 +58,11 @@ public readonly struct Ref<T>
 
                     if (owner is IMemoryOwner<T> memoryOwner)
                     {
+                        if (memoryOwner is MemoryManager<T> memoryManager)
+                        {
+                            span = memoryManager.GetSpan();
+                            goto hasSpan;
+                        }
                         memory = memoryOwner.Memory;
                         memoryRef = ref memory;
                     }
@@ -69,7 +75,8 @@ public readonly struct Ref<T>
                         memoryRef = ref memory;
 #endif
                     }
-                    Span<T> span = memoryRef.Span;
+                    span = memoryRef.Span;
+                hasSpan:
                     if (unmanaged >= span.Length) // Add in case memory returns a different span with another length.
                         Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
                     return ref Unsafe.Add(ref MemoryMarshal.GetReference(span), index);
@@ -170,8 +177,22 @@ public readonly struct Ref<T>
         if (index > memory.Length)
             Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
 
-        _owner = new MemoryWrapper<T>(memory);
-        _unmanaged = index | int.MinValue;
+        // Try to avoid boxing the `Memory<T>`.
+        if (MemoryMarshal.TryGetArray(memory, out ArraySegment<T> arraySegment))
+        {
+            _owner = arraySegment.Array;
+            _unmanaged = arraySegment.Offset + index;
+        }
+        else if (MemoryMarshal.TryGetMemoryManager<T, MemoryManager<T>>(memory, out MemoryManager<T>? manager, out int start, out _))
+        {
+            _owner = manager;
+            _unmanaged = (start + index) | int.MinValue;
+        }
+        else
+        {
+            _owner = memory;
+            _unmanaged = index | int.MinValue;
+        }
     }
 
     /// <summary>

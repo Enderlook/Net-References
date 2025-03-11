@@ -253,6 +253,12 @@ public sealed class Offset<TOwner, TReference>
                 _mode = Mode.SingleArrayUnkown;
                 return;
             }
+
+            if (typeof(MemoryManager<TReference>).IsAssignableFrom(typeof(TOwner)))
+            {
+                _mode = Mode.MemoryManager;
+                goto checkNegativeIndex;
+            }
         }
 
         if (typeof(IMemoryOwner<TReference>).IsAssignableFrom(typeof(TOwner)))
@@ -371,6 +377,12 @@ public sealed class Offset<TOwner, TReference>
                     _mode = Mode.ArrayUnkown;
                 }
                 return;
+            }
+
+            if (typeof(MemoryManager<TReference>).IsAssignableFrom(typeof(TOwner)))
+            {
+                _mode = Mode.MemoryManager;
+                goto getNegativeSingleIndex;
             }
         }
 
@@ -502,6 +514,11 @@ public sealed class Offset<TOwner, TReference>
                 Memory<TReference> memory = ((IMemoryOwner<TReference>)owner).Memory;
                 return ref FromMemory(ref memory);
             }
+            case Mode.MemoryManager:
+            {
+                Debug.Assert(owner is MemoryManager<TReference>);
+                return ref FromMemorySpan(Unsafe.As<MemoryManager<TReference>>(owner).GetSpan());
+            }
 #if NET8_0_OR_GREATER
             case Mode.InlineArray:
             {
@@ -579,7 +596,12 @@ public sealed class Offset<TOwner, TReference>
                     int index = _index;
                     if (index >= memory.Length)
                         Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
-                    return Ref<TReference>.CreateUnsafe(new MemoryWrapper<TReference>(memory), index | int.MinValue, default);
+                    // Try to avoid boxing the `Memory<T>`.
+                    if (MemoryMarshal.TryGetArray(memory, out ArraySegment<TReference> segment))
+                        return Ref<TReference>.CreateUnsafe(segment.Array, segment.Offset + index, default);
+                    if (MemoryMarshal.TryGetMemoryManager<TReference, MemoryManager<TReference>>(memory, out MemoryManager<TReference>? manager, out int start, out _))
+                        return Ref<TReference>.CreateUnsafe(manager, (start + index) | int.MinValue, default);
+                    return Ref<TReference>.CreateUnsafe(memory, index | int.MinValue, default);
                 }
                 else
                 {
@@ -592,13 +614,27 @@ public sealed class Offset<TOwner, TReference>
                     int index = _index;
                     if (index >= memory.Length)
                         Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
+                    // Try to avoid future lookup in `Memory<T>.Span`.
+                    if (MemoryMarshal.TryGetArray(memory, out ArraySegment<TReference> segment))
+                        return Ref<TReference>.CreateUnsafe(segment.Array, segment.Offset + index, default);
+                    if (MemoryMarshal.TryGetMemoryManager<TReference, MemoryManager<TReference>>(memory, out MemoryManager<TReference>? manager, out int start, out _))
+                        return Ref<TReference>.CreateUnsafe(manager, (start + index) | int.MinValue, default);
                     return Ref<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
                 }
             }
             case Mode.IMemoryOwner:
             {
+                Debug.Assert(owner is IMemoryOwner<TReference>);
                 int index = _index;
                 if (index >= (typeof(T).IsValueType ? ((IMemoryOwner<TReference>)owner).Memory : Unsafe.As<IMemoryOwner<TReference>>(owner).Memory).Length)
+                    Utils.ThrowArgumentException_OwnerSpanLengthMustBeGreaterThanIndex();
+                return Ref<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
+            }
+            case Mode.MemoryManager:
+            {
+                Debug.Assert(owner is MemoryManager<TReference>);
+                int index = _index;
+                if (index >= Unsafe.As<MemoryManager<TReference>>(owner).GetSpan().Length)
                     Utils.ThrowArgumentException_OwnerSpanLengthMustBeGreaterThanIndex();
                 return Ref<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
             }
@@ -768,5 +804,13 @@ public sealed class Offset<TOwner, TReference>
         if (memory.Length < index)
             Utils.ThrowArgumentException_IndexMustBeLowerThanIMemoryOwnerMemoryLength();
         return ref Unsafe.Add(ref MemoryMarshal.GetReference(memory.Span), index);
+    }
+
+    private ref TReference FromMemorySpan(Span<TReference> span)
+    {
+        int index = _index;
+        if (span.Length < index)
+            Utils.ThrowArgumentException_IndexMustBeLowerThanIMemoryOwnerMemoryLength();
+        return ref Unsafe.Add(ref MemoryMarshal.GetReference(span), index);
     }
 }

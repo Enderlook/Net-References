@@ -75,6 +75,12 @@ public class RefTests
         [
             new int[3].AsMemory(),
             new int[10].AsMemory(2, 3),
+            new ClassMemoryOwner<int>(new int[3]).Memory,
+            new ClassMemoryOwner<int>(new int[10].AsMemory(2, 3)).Memory,
+            new StructMemoryOwner<int>(new int[3]).Memory,
+            new StructMemoryOwner<int>(new int[10].AsMemory(2, 3)).Memory,
+            new ClassMemoryManager<int>(new int[3]).Memory,
+            new ClassMemoryManager<int>(new int[10].AsMemory(2, 3)).Memory,
         ];
 
         Offset<Memory<int>, int>[] offsets =
@@ -121,29 +127,83 @@ public class RefTests
     }
 
     [Fact]
-    public void MemoryWrapperReference()
+    public void MemoryManagerReference()
     {
-        MemoryWrapper<int>[] memories =
+        ClassMemoryManager<int>[] memories =
         [
             new(new int[3].AsMemory()),
             new(new int[10].AsMemory(2, 3)),
             new(new int[10].AsMemory(2, 3)),
         ];
 
-        Offset<MemoryWrapper<int>, int>[] offsets =
+        Offset<ClassMemoryManager<int>, int>[] offsets =
         [
             new(1),
             new([1]),
-            Offset.ForIMemoryOwnerElement<MemoryWrapper<int>, int>(1),
+            Offset.ForIMemoryOwnerElement<ClassMemoryManager<int>, int>(1),
+            Offset.ForMemoryManagerElement<ClassMemoryManager<int>, int>(1),
         ];
 
         for (int i = 0; i < memories.Length; i++)
         {
-            MemoryWrapper<int> memory = memories[i];
+            ClassMemoryManager<int> memory = memories[i];
 
             Ref<int> reference = new(memory, 1);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
-            foreach (Offset<MemoryWrapper<int>, int> offset in offsets)
+            foreach (Offset<ClassMemoryManager<int>, int> offset in offsets)
+            {
+                reference = offset.From(memory);
+                Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
+                reference = offset.FromObject(memory);
+                Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
+
+                Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref memory));
+            }
+
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(MemoryManager<int>)!, 0));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(ClassMemoryManager<int>)!, 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>(memory, -1));
+            Assert.Throws<ArgumentException>(() => new Ref<int>(memory, memory.Memory.Length * 2));
+        }
+
+        foreach (Offset<ClassMemoryManager<int>, int> offset in offsets)
+        {
+            Assert.Throws<ArgumentNullException>(() => offset.From(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new ClassMemoryManager<float>(new float[0])));
+            Assert.Throws<ArgumentException>(() => offset.From(new ClassMemoryManager<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new ClassMemoryManager<int>(new int[0])));
+        }
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<ClassMemoryManager<int>, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForMemoryManagerElement<ClassMemoryManager<int>, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForMemoryManagerElement<int>(-1));
+    }
+
+    [Fact]
+    public void MemoryOwnerReference()
+    {
+        ClassMemoryOwner<int>[] memories =
+        [
+            new(new int[3].AsMemory()),
+            new(new int[10].AsMemory(2, 3)),
+            new(new int[10].AsMemory(2, 3)),
+        ];
+
+        Offset<ClassMemoryOwner<int>, int>[] offsets =
+        [
+            new(1),
+            new([1]),
+            Offset.ForIMemoryOwnerElement<ClassMemoryOwner<int>, int>(1),
+        ];
+
+        for (int i = 0; i < memories.Length; i++)
+        {
+            ClassMemoryOwner<int> memory = memories[i];
+
+            Ref<int> reference = new(memory, 1);
+            Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
+            foreach (Offset<ClassMemoryOwner<int>, int> offset in offsets)
             {
                 reference = offset.From(memory);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
@@ -154,49 +214,49 @@ public class RefTests
             }
 
             Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(IMemoryOwner<int>)!, 0));
-            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(MemoryWrapper<int>)!, 0));
+            Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(ClassMemoryOwner<int>)!, 0));
             Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>(memory, -1));
             Assert.Throws<ArgumentException>(() => new Ref<int>(memory, memory.Memory.Length * 2));
         }
 
-        foreach (Offset<MemoryWrapper<int>, int> offset in offsets)
+        foreach (Offset<ClassMemoryOwner<int>, int> offset in offsets)
         {
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
-            Assert.Throws<ArgumentException>(() => offset.FromObject(new MemoryWrapper<float>(new float[0])));
-            Assert.Throws<ArgumentException>(() => offset.From(new MemoryWrapper<int>(new int[0])));
-            Assert.Throws<ArgumentException>(() => offset.FromObject(new MemoryWrapper<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new ClassMemoryOwner<float>(new float[0])));
+            Assert.Throws<ArgumentException>(() => offset.From(new ClassMemoryOwner<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new ClassMemoryOwner<int>(new int[0])));
         }
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<MemoryWrapper<int>, int>(-1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForIMemoryOwnerElement<MemoryWrapper<int>, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<ClassMemoryOwner<int>, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForIMemoryOwnerElement<ClassMemoryOwner<int>, int>(-1));
         Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForIMemoryOwnerElement<int>(-1));
     }
 
     [Fact]
-    public void MemoryWrapperValue()
+    public void MemoryOwnerValue()
     {
-        MemoryWrapper_<int>[] memories =
+        StructMemoryOwner<int>[] memories =
         [
             new(new int[3].AsMemory()),
             new(new int[10].AsMemory(2, 3)),
             new(new int[10].AsMemory(2, 3)),
         ];
 
-        Offset<MemoryWrapper_<int>, int>[] offsets =
+        Offset<StructMemoryOwner<int>, int>[] offsets =
         [
             new(1),
             new([1]),
-            Offset.ForIMemoryOwnerElement<MemoryWrapper_<int>, int>(1),
+            Offset.ForIMemoryOwnerElement<StructMemoryOwner<int>, int>(1),
         ];
 
         for (int i = 0; i < memories.Length; i++)
         {
-            MemoryWrapper_<int> memory = memories[i];
+            StructMemoryOwner<int> memory = memories[i];
 
             Ref<int> reference = new(memory, 1);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
-            foreach (Offset<MemoryWrapper_<int>, int> offset in offsets)
+            foreach (Offset<StructMemoryOwner<int>, int> offset in offsets)
             {
                 reference = offset.From(memory);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
@@ -210,16 +270,16 @@ public class RefTests
             Assert.Throws<ArgumentException>(() => new Ref<int>(memory, memory.Memory.Length * 2));
         }
 
-        foreach (Offset<MemoryWrapper_<int>, int> offset in offsets)
+        foreach (Offset<StructMemoryOwner<int>, int> offset in offsets)
         {
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
-            Assert.Throws<ArgumentException>(() => offset.FromObject(new MemoryWrapper_<float>(new float[0])));
-            Assert.Throws<ArgumentException>(() => offset.From(new MemoryWrapper_<int>(new int[0])));
-            Assert.Throws<ArgumentException>(() => offset.FromObject(new MemoryWrapper_<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new StructMemoryOwner<float>(new float[0])));
+            Assert.Throws<ArgumentException>(() => offset.From(new StructMemoryOwner<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new StructMemoryOwner<int>(new int[0])));
         }
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<MemoryWrapper_<int>, int>(-1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForIMemoryOwnerElement<MemoryWrapper_<int>, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<StructMemoryOwner<int>, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForIMemoryOwnerElement<StructMemoryOwner<int>, int>(-1));
         Assert.Throws<ArgumentOutOfRangeException>(() => Offset.ForIMemoryOwnerElement<int>(-1));
     }
 
@@ -867,22 +927,27 @@ internal struct ValueArray<T>
 }
 #endif
 
-internal class MemoryWrapper<T>(Memory<T> memory) : IMemoryOwner<T>
+internal class ClassMemoryOwner<T>(Memory<T> memory) : IMemoryOwner<T>
 {
     public Memory<T> Memory => memory;
 
-    public void Dispose()
-    {
-        throw new NotImplementedException();
-    }
+    public void Dispose() => throw new NotImplementedException();
 }
 
-internal struct MemoryWrapper_<T>(Memory<T> memory) : IMemoryOwner<T>
+internal struct StructMemoryOwner<T>(Memory<T> memory) : IMemoryOwner<T>
 {
     public Memory<T> Memory => memory;
 
-    public void Dispose()
-    {
-        throw new NotImplementedException();
-    }
+    public void Dispose() => throw new NotImplementedException();
+}
+
+internal class ClassMemoryManager<T>(Memory<T> memory) : MemoryManager<T>
+{
+    public override Span<T> GetSpan() => memory.Span;
+
+    public override MemoryHandle Pin(int elementIndex = 0) => throw new NotImplementedException();
+
+    public override void Unpin() => throw new NotImplementedException();
+
+    protected override void Dispose(bool disposing) => throw new NotImplementedException();
 }

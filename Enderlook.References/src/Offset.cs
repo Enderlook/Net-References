@@ -80,7 +80,7 @@ public static class Offset
     {
         if (index < 0)
             Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
-        return new(Mode.IMemoryOwner, default, index);
+        return new(typeof(MemoryManager<TReference>).IsAssignableFrom(typeof(TMemoryOwner)) ? Mode.MemoryManager : Mode.IMemoryOwner, default, index);
     }
 
     /// <summary>
@@ -93,5 +93,29 @@ public static class Offset
         if (index < 0)
             Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
         return new(Mode.IMemoryOwner, default, index);
+    }
+
+    /// <summary>
+    /// Creates an offset to an specific index of an <see cref="MemoryManager{T}"/>.
+    /// </summary>
+    /// <param name="index">Index of the element to get its reference.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is negative.</exception>
+    public static Offset<MemoryManager<TReference>, TReference> ForMemoryManagerElement<TReference>(int index)
+    {
+        if (index < 0)
+            Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
+        return new(Mode.MemoryManager, default, index);
+    }
+
+    /// <summary>
+    /// Creates an offset to an specific index of an <typeparamref name="TMemoryManager"/>.
+    /// </summary>
+    /// <param name="index">Index of the element to get its reference.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is negative.</exception>
+    public static Offset<TMemoryManager, TReference> ForMemoryManagerElement<TMemoryManager, TReference>(int index)
+    {
+        if (index < 0)
+            Utils.ThrowArgumentOutOfRangeException_IndexCanNotBeNegative();
+        return new(Mode.MemoryManager, default, index);
     }
 }

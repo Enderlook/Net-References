@@ -406,20 +406,12 @@ internal enum Mode
     ArraySegment,
     Memory,
     IMemoryOwner,
+    MemoryManager,
     InlineArray,
     SingleArray,
     Array,
     SingleArrayUnkown,
     ArrayUnkown,
-}
-
-internal sealed class MemoryWrapper<T>(Memory<T> memory) : IMemoryOwner<T>
-{
-    public Memory<T> Memory => memory;
-
-    public void Dispose()
-    {
-    }
 }
 
 #if NET8_0_OR_GREATER
