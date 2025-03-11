@@ -20,6 +20,11 @@ internal sealed class NotNullIfNotNullAttribute : Attribute
 internal sealed class NotNullAttribute : Attribute { }
 #endif
 
+#if !NET7_0_OR_GREATER
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Property | AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
+internal sealed class UnscopedRefAttribute : Attribute { }
+#endif
+
 #if !NET9_0_OR_GREATER
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Constructor | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 internal sealed class OverloadResolutionPriorityAttribute : Attribute

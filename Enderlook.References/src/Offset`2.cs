@@ -462,81 +462,81 @@ public sealed class Offset<TOwner, TReference>
     }
 
     /// <summary>
-    /// Creates an inner reference for the specified owner, only valid for value types.
+    /// Creates an inner reference for the specified owner, the <see langword="ref"/> is required for value types.
     /// </summary>
     /// <param name="owner">Owner where reference point to.</param>
     /// <returns>Inner reference.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when <typeparamref name="TOwner"/> is not a value type.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="owner"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/> is <see langword="null"/>, or is an offset from an <see cref="ArraySegment{T}"/> or a <see cref="Memory{T}"/> and index is out of range.</exception>
+    /// <exception cref="ArrayTypeMismatchException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/>'s <see cref="Type.GetElementType()"/> is not <typeparamref name="TReference"/>.</exception>
+    public unsafe ref TReference FromRef(TOwner owner)
+    {
+        if (owner is null)
+            Utils.ThrowArgumentNullException_Owner();
+
+        if (typeof(TOwner).IsValueType)
+        {
+            if (typeof(TOwner) == typeof(Memory<TReference>))
+            {
+                if (_mode != Mode.Memory)
+                    goto error;
+            }
+            else if (typeof(TOwner) == typeof(ArraySegment<TReference>))
+            {
+                if (_mode != Mode.ArraySegment)
+                    goto error;
+            }
+            else if (typeof(IMemoryOwner<TReference>).IsAssignableFrom(typeof(TOwner)))
+            {
+                if (_mode != Mode.IMemoryOwner)
+                    goto error;
+            }
+            else
+                goto error;
+        }
+        return ref FromObjectUnsafeRef(ref owner);
+    error:
+        Utils.ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions();
+#if NET5_0_OR_GREATER
+        return ref Unsafe.NullRef<TReference>();
+#else
+        unsafe
+        {
+            return ref Unsafe.AsRef<TReference>(null);
+        }
+#endif
+    }
+
+    /// <summary>
+    /// Creates an inner reference for the specified owner, the <see langword="ref"/> is required for value types.
+    /// </summary>
+    /// <param name="owner">Owner where reference point to.</param>
+    /// <returns>Inner reference.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="owner"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/> is <see langword="null"/>, or is an offset from an <see cref="ArraySegment{T}"/> or a <see cref="Memory{T}"/> and index is out of range.</exception>
     /// <exception cref="ArrayTypeMismatchException">Thrown when <typeparamref name="TOwner"/> is an <see cref="ArraySegment{T}"/> and its <see cref="ArraySegment{T}.Array"/>'s <see cref="Type.GetElementType()"/> is not <typeparamref name="TReference"/>.</exception>
     public unsafe ref TReference FromRef(ref TOwner owner)
     {
-        if (!typeof(TOwner).IsValueType) Utils.ThrowInvalidOperationException_InvalidTReferenceTypeOnlyValueTypes();
-        switch (_mode)
-        {
-            case Mode.FieldInfo:
-            {
-                if (!_valueCached)
-                {
-                    Debug.Assert(_payload is FieldInfo);
-                    FromFieldValue(Unsafe.As<FieldInfo>(_payload));
-                    _valueCached = true;
-                }
-                Debug.Assert(_valuePayload is not null);
-                return ref _valuePayload(ref owner);
-            }
-            case Mode.ArraySegment:
-            {
-                Debug.Assert(typeof(TOwner) == typeof(ArraySegment<TReference>));
-                ArraySegment<TReference> arraySegment = Unsafe.As<TOwner, ArraySegment<TReference>>(ref owner);
-                if (arraySegment.Array is null)
-                    Utils.ThrowArgumentException_OwnerSegmentArrayIsNull();
-                if (!typeof(TReference).IsValueType && arraySegment.Array.GetType() != typeof(TReference[]))
-                    Utils.ThrowArrayTypeMismatchException_Segment();
-                int index = _index;
-                if (index >= arraySegment.Count)
-                    Utils.ThrowArgumentException_OwnerCountMustBeGreaterThanIndex();
+        if (owner is null)
+            Utils.ThrowArgumentNullException_Owner();
+        return ref FromObjectUnsafeRef(ref owner);
+    }
 
-#if NET5_0_OR_GREATER
-                return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(arraySegment.Array), arraySegment.Offset + index);
-#else
-                return ref arraySegment.Array[arraySegment.Offset + index];
-#endif
-            }
-            case Mode.Memory:
-            {
-                Debug.Assert(typeof(TOwner) == typeof(Memory<TReference>));
-                ref Memory<TReference> memory = ref Unsafe.As<TOwner, Memory<TReference>>(ref owner);
-                return ref FromMemory(ref memory);
-            }
-            case Mode.IMemoryOwner:
-            {
-                Memory<TReference> memory = ((IMemoryOwner<TReference>)owner).Memory;
-                return ref FromMemory(ref memory);
-            }
-            case Mode.MemoryManager:
-            {
-                Debug.Assert(owner is MemoryManager<TReference>);
-                return ref FromMemorySpan(Unsafe.As<MemoryManager<TReference>>(owner).GetSpan());
-            }
-#if NET8_0_OR_GREATER
-            case Mode.InlineArray:
-            {
-                Debug.Assert(typeof(TOwner).IsDefined(typeof(InlineArrayAttribute)));
-                Debug.Assert(_index < typeof(TOwner).GetCustomAttribute<InlineArrayAttribute>()!.Length);
-                return ref Unsafe.Add(ref Unsafe.As<TOwner, TReference>(ref owner), _index);
-            }
-#endif
-            default:
-            {
-                Debug.Fail("Impossible state.");
-#if NET5_0_OR_GREATER
-                return ref Unsafe.NullRef<TReference>();
-#else
-                return ref Unsafe.AsRef<TReference>(null);
-#endif
-            }
-        }
+    /// <summary>
+    /// Creates an inner reference for the specified owner, supports boxed value types.
+    /// </summary>
+    /// <param name="owner">Owner where reference point to.</param>
+    /// <returns>Inner reference.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="owner"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when the type of <paramref name="owner"/> is not assignable to <typeparamref name="TOwner"/>, the offset is an index from an <see cref="Array"/>, a <see cref="Memory{T}"/>, an <see cref="ArraySegment{T}"/>, or a type assignable to <see cref="IMemoryOwner{T}"/> and is out of bounds, or <see cref="ArraySegment{T}.Array"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArrayTypeMismatchException">Thrown when the offset is an index from an <see cref="Array"/> but the provided array runtime type doesn't match <typeparamref name="TOwner"/>.</exception>
+    public ref TReference FromObjectRef(object owner)
+    {
+        if (owner is null)
+            Utils.ThrowArgumentNullException_Owner();
+        if (!typeof(TOwner).IsAssignableFrom(owner.GetType()))
+            Utils.ThrowArgumentException_OwnerTypeDoesNotMatch();
+        return ref FromObjectUnsafeRef(ref owner);
     }
 
     internal unsafe Ref<TReference> FromObjectUnsafe<T>(T owner)
@@ -568,15 +568,11 @@ public sealed class Offset<TOwner, TReference>
             }
             case Mode.ArraySegment:
             {
-                Debug.Assert(owner is ArraySegment<TReference>);
-                ArraySegment<TReference> arraySegment;
-                if (typeof(T).IsValueType)
-                {
-                    Debug.Assert(typeof(T) == typeof(ArraySegment<TReference>));
-                    arraySegment = Unsafe.As<T, ArraySegment<TReference>>(ref owner);
-                }
-                else
-                    arraySegment = (ArraySegment<TReference>)(object)owner;
+                ref ArraySegment<TReference> arraySegment = ref Utils.From<T, ArraySegment<TReference>>(ref owner
+#if !NET5_0_OR_GREATER
+                    , out _
+#endif
+                    );
                 if (arraySegment.Array is null)
                     Utils.ThrowArgumentException_OwnerSegmentArrayIsNull();
                 if (!typeof(TReference).IsValueType && arraySegment.Array.GetType() != typeof(TReference[]))
@@ -589,38 +585,20 @@ public sealed class Offset<TOwner, TReference>
             case Mode.Memory:
             {
                 Debug.Assert(owner is Memory<TReference>);
-                if (typeof(T).IsValueType)
-                {
-                    Debug.Assert(typeof(T) == typeof(Memory<TReference>));
-                    ref Memory<TReference> memory = ref Unsafe.As<T, Memory<TReference>>(ref owner);
-                    int index = _index;
-                    if (index >= memory.Length)
-                        Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
-                    // Try to avoid boxing the `Memory<T>`.
-                    if (MemoryMarshal.TryGetArray(memory, out ArraySegment<TReference> segment))
-                        return Ref<TReference>.CreateUnsafe(segment.Array, segment.Offset + index, default);
-                    if (MemoryMarshal.TryGetMemoryManager<TReference, MemoryManager<TReference>>(memory, out MemoryManager<TReference>? manager, out int start, out _))
-                        return Ref<TReference>.CreateUnsafe(manager, (start + index) | int.MinValue, default);
-                    return Ref<TReference>.CreateUnsafe(memory, index | int.MinValue, default);
-                }
-                else
-                {
-                    Debug.Assert(owner is Memory<TReference>);
-#if NET5_0_OR_GREATER
-                    ref Memory<TReference> memory = ref Unsafe.Unbox<Memory<TReference>>(owner);
-#else
-                    Memory<TReference> memory = (Memory<TReference>)(object)owner;
+                ref Memory<TReference> memory = ref Utils.From<T, Memory<TReference>>(ref owner
+#if !NET5_0_OR_GREATER
+                    , out _
 #endif
-                    int index = _index;
-                    if (index >= memory.Length)
-                        Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
-                    // Try to avoid future lookup in `Memory<T>.Span`.
-                    if (MemoryMarshal.TryGetArray(memory, out ArraySegment<TReference> segment))
-                        return Ref<TReference>.CreateUnsafe(segment.Array, segment.Offset + index, default);
-                    if (MemoryMarshal.TryGetMemoryManager<TReference, MemoryManager<TReference>>(memory, out MemoryManager<TReference>? manager, out int start, out _))
-                        return Ref<TReference>.CreateUnsafe(manager, (start + index) | int.MinValue, default);
-                    return Ref<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
-                }
+                    );
+                int index = _index;
+                if (index >= memory.Length)
+                    Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
+                // Try to avoid boxing the `Memory<T>`.
+                if (MemoryMarshal.TryGetArray(memory, out ArraySegment<TReference> segment))
+                    return Ref<TReference>.CreateUnsafe(segment.Array, segment.Offset + index, default);
+                if (MemoryMarshal.TryGetMemoryManager<TReference, MemoryManager<TReference>>(memory, out MemoryManager<TReference>? manager, out int start, out _))
+                    return Ref<TReference>.CreateUnsafe(manager, (start + index) | int.MinValue, default);
+                return Ref<TReference>.CreateUnsafe(typeof(T).IsValueType ? memory : owner, index | int.MinValue, default);
             }
             case Mode.IMemoryOwner:
             {
@@ -680,6 +658,156 @@ public sealed class Offset<TOwner, TReference>
         }
         Debug.Fail("Impossible state.");
         return default;
+    }
+
+    internal unsafe ref TReference FromObjectUnsafeRef<T>(scoped ref T owner)
+    {
+        Debug.Assert(owner is not null);
+
+        switch (_mode)
+        {
+            case Mode.FieldInfo:
+            {
+                if (typeof(T).IsValueType)
+                {
+                    Debug.Assert(typeof(T) == typeof(TOwner));
+                    if (!_valueCached)
+                    {
+                        Debug.Assert(_payload is FieldInfo);
+                        FromFieldValue(Unsafe.As<FieldInfo>(_payload));
+                        _valueCached = true;
+                    }
+                    Debug.Assert(_valuePayload is not null);
+                    return ref _valuePayload(ref Unsafe.As<T, TOwner>(ref owner));
+                }
+                else
+                {
+                    if (!_referenceCached)
+                    {
+                        Debug.Assert(_payload is FieldInfo);
+                        FromField(owner, Unsafe.As<FieldInfo>(_payload));
+                        _referenceCached = true;
+                    }
+                    object? payload = _referencePayload;
+                    Debug.Assert(payload is not null);
+                    if (payload.GetType() == typeof(FieldInfo[]))
+                    {
+                        TypedReference typedReference = TypedReference.MakeTypedReference(owner, Unsafe.As<FieldInfo[]>(payload));
+                        ref TReference field = ref __refvalue(typedReference, TReference);
+#pragma warning disable CS9082 // Local is returned by reference but was initialized to a value that cannot be returned by reference
+                        return ref field;
+#pragma warning restore CS9082 // Local is returned by reference but was initialized to a value that cannot be returned by reference
+                    }
+                    else
+                    {
+                        Debug.Assert(payload is ReferenceProvider<TReference>);
+                        return ref Unsafe.As<ReferenceProvider<TReference>>(payload)(owner, default);
+                    }
+                }
+            }
+            case Mode.SingleZeroArray:
+            {
+                if (!typeof(TReference).IsValueType && owner.GetType() != typeof(TReference[]))
+                    Utils.ThrowArrayTypeMismatchException_Array();
+                Debug.Assert(owner is TReference[]);
+                TReference[] array = Unsafe.As<TReference[]>(owner);
+                int index = _index;
+                if (unchecked((uint)index >= (uint)array.Length))
+                    Utils.ThrowArgumentException_OwnerLengthMustBeGreaterThanIndex();
+#if NET5_0_OR_GREATER
+                return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), index);
+#else
+                return ref array[index];
+#endif
+            }
+            case Mode.ArraySegment:
+            {
+                Debug.Assert(typeof(TOwner) == typeof(ArraySegment<TReference>));
+                ref ArraySegment<TReference> arraySegment = ref Utils.From<T, ArraySegment<TReference>>(ref owner
+#if !NET5_0_OR_GREATER
+                    , out _
+#endif
+                    );
+                TReference[]? array = arraySegment.Array;
+                if (array is null)
+                    Utils.ThrowArgumentException_OwnerSegmentArrayIsNull();
+                if (!typeof(TReference).IsValueType && array.GetType() != typeof(TReference[]))
+                    Utils.ThrowArrayTypeMismatchException_Segment();
+                int index = _index;
+                if (index >= arraySegment.Count)
+                    Utils.ThrowArgumentException_OwnerCountMustBeGreaterThanIndex();
+#if NET5_0_OR_GREATER
+                return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(array), arraySegment.Offset + index);
+#else
+                return ref array[arraySegment.Offset + index];
+#endif
+            }
+            case Mode.Memory:
+            {
+                Debug.Assert(typeof(TOwner) == typeof(Memory<TReference>));
+                return ref FromMemory(ref Utils.From<T, Memory<TReference>>(ref owner
+#if !NET5_0_OR_GREATER
+                    , out _
+#endif
+                    ));
+            }
+            case Mode.IMemoryOwner:
+            {
+                Debug.Assert(owner is IMemoryOwner<TReference>);
+                Memory<TReference> memory = typeof(TOwner).IsValueType ? ((IMemoryOwner<TReference>)owner).Memory : Unsafe.As<IMemoryOwner<TReference>>(owner).Memory;
+                return ref FromMemory(ref memory);
+            }
+            case Mode.MemoryManager:
+            {
+                Debug.Assert(owner is MemoryManager<TReference>);
+                return ref FromMemorySpan(Unsafe.As<MemoryManager<TReference>>(owner).GetSpan());
+            }
+#if NET8_0_OR_GREATER
+            case Mode.InlineArray:
+            {
+                Debug.Assert(typeof(TOwner).IsDefined(typeof(InlineArrayAttribute)));
+                Debug.Assert(_index < typeof(TOwner).GetCustomAttribute<InlineArrayAttribute>()!.Length);
+
+                return ref Unsafe.Add(ref Unsafe.As<TOwner, TReference>(ref typeof(T).IsValueType ? ref Unsafe.As<T, TOwner>(ref owner) : ref UnboxerHelper<TOwner>.Unbox(owner)), _index);
+            }
+#endif
+
+            case Mode.SingleArray:
+            {
+                return ref FromSingleArrayRef(owner, owner.GetType());
+            }
+            case Mode.Array:
+            {
+                Debug.Assert(_payload is int[]);
+                return ref FromMultiArrayRef(owner, owner.GetType(), Unsafe.As<int[]>(_payload));
+            }
+            case Mode.SingleArrayUnkown:
+            {
+                Type ownerType = owner.GetType();
+                if (ownerType.GetArrayRank() != 1)
+                    Utils.ThrowArgumentException_OwnerRankDoesNotMatchIndexes();
+                return ref FromSingleArrayRef(owner, ownerType);
+            }
+            case Mode.ArrayUnkown:
+            {
+                Debug.Assert(_payload is int[]);
+                int[] indexes = Unsafe.As<int[]>(_payload);
+                Type ownerType = owner.GetType();
+                if (ownerType.GetArrayRank() != indexes.Length)
+                    Utils.ThrowArgumentException_OwnerRankDoesNotMatchIndexes();
+                Debug.Assert(_payload is int[]);
+                return ref FromMultiArrayRef(owner, owner.GetType(), indexes);
+            }
+            default:
+            {
+                Debug.Fail("Impossible state.");
+#if NET5_0_OR_GREATER
+                return ref Unsafe.NullRef<TReference>();
+#else
+                return ref Unsafe.AsRef<TReference>(null);
+#endif
+            }
+        }
     }
 
 #if NET5_0_OR_GREATER
@@ -782,6 +910,24 @@ public sealed class Offset<TOwner, TReference>
 #endif
     }
 
+    private ref TReference FromSingleArrayRef(object owner, Type ownerType)
+    {
+        Debug.Assert(owner.GetType() == ownerType);
+        if (!typeof(TReference).IsValueType && ownerType.GetElementType()! != typeof(TReference))
+            Utils.ThrowArrayTypeMismatchException_Array();
+        Debug.Assert(owner is Array);
+        Array array = Unsafe.As<Array>(owner);
+        int index = _index;
+        int lowerBound = array.GetLowerBound(0);
+        if (index < lowerBound || index > array.GetUpperBound(0))
+            Utils.ThrowArgumentException_OwnerIndexOutOfBounds();
+#if NET6_0_OR_GREATER
+        return ref Unsafe.Add(ref Unsafe.As<byte, TReference>(ref MemoryMarshal.GetArrayDataReference(array)), index - lowerBound);
+#else
+        return ref ObjectHelpers.GetReference1<TReference>(owner, index);
+#endif
+    }
+
     private static Ref<TReference> FromMultiArray(object owner, Type ownerType, int[] indexes)
     {
         Debug.Assert(owner.GetType() == ownerType);
@@ -795,6 +941,22 @@ public sealed class Offset<TOwner, TReference>
 #else
         Utils.CheckBounds(array, indexes);
         return Ref<TReference>.CreateUnsafe(owner, default, indexes);
+#endif
+    }
+
+    private static ref TReference FromMultiArrayRef(object owner, Type ownerType, int[] indexes)
+    {
+        Debug.Assert(owner.GetType() == ownerType);
+        if (!typeof(TReference).IsValueType && ownerType.GetElementType() != typeof(TReference))
+            Utils.ThrowArrayTypeMismatchException_Array();
+        Debug.Assert(owner is Array);
+        Array array = Unsafe.As<Array>(owner);
+#if NET6_0_OR_GREATER
+        int index = Utils.CalculateIndex(array, indexes);
+        return ref Unsafe.Add(ref Unsafe.As<byte, TReference>(ref MemoryMarshal.GetArrayDataReference(array)), index);
+#else
+        Utils.CheckBounds(array, indexes);
+        return ref Utils.GetReference<TReference>(array, indexes);
 #endif
     }
 

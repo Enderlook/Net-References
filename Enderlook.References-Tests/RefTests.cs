@@ -1,4 +1,5 @@
-﻿using System.Buffers;
+﻿using System;
+using System.Buffers;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -40,13 +41,25 @@ public class RefTests
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
             reference = offset.FromObject(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
+            scoped ref int reference_ = ref offset.FromRef(array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1]));
+            reference_ = ref offset.FromRef(ref array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1]));
+            reference_ = ref offset.FromObjectRef(array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1]));
 
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef<int[]>(default(int[]))));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new float[0]));
             Assert.Throws<ArgumentException>(() => offset.From(new int[0]));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0]));
-            Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref array));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(new int[0]));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0]));
         }
 
         Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(int[])!, 0));
@@ -104,6 +117,10 @@ public class RefTests
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Span[1]));
                 ref int reference_ = ref offset.FromRef(ref memory);
                 Assert.True(Unsafe.AreSame(ref reference_, ref memory.Span[1]));
+                reference_ = ref offset.FromRef(memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Span[1]));
+                reference_ = ref offset.FromObjectRef(memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Span[1]));
             }
 
             Assert.Throws<ArgumentOutOfRangeException>(() => new Ref<int>(memory, -1));
@@ -112,14 +129,15 @@ public class RefTests
 
         foreach (Offset<Memory<int>, int> offset in offsets)
         {
+            Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0].AsMemory()));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new float[0].AsMemory()));
             Assert.Throws<ArgumentException>(() => offset.From(new int[0].AsMemory()));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0].AsMemory()));
-            Assert.Throws<ArgumentException>(() =>
-            {
-                Memory<int> memory_ = new int[0].AsMemory();
-                return offset.FromRef(ref memory_);
-            });
+            Assert.Throws<ArgumentException>(() => offset.FromRef(new int[0].AsMemory()));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(new int[0].AsMemory())));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0].AsMemory()));
         }
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<Memory<int>, int>(-1));
@@ -156,8 +174,12 @@ public class RefTests
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
                 reference = offset.FromObject(memory);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
-
-                Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref memory));
+                scoped ref int reference_ = ref offset.FromRef(memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Memory.Span[1]));
+                reference_ = ref offset.FromRef(ref memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Memory.Span[1]));
+                reference_ = ref offset.FromObjectRef(memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Memory.Span[1]));
             }
 
             Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(MemoryManager<int>)!, 0));
@@ -170,9 +192,16 @@ public class RefTests
         {
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(ClassMemoryManager<int>))));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new ClassMemoryManager<float>(new float[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new ClassMemoryManager<float>(new float[0])));
             Assert.Throws<ArgumentException>(() => offset.From(new ClassMemoryManager<int>(new int[0])));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new ClassMemoryManager<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(new ClassMemoryManager<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(new ClassMemoryManager<int>(new int[0]))));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new ClassMemoryManager<int>(new int[0])));
         }
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<ClassMemoryManager<int>, int>(-1));
@@ -209,8 +238,12 @@ public class RefTests
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
                 reference = offset.FromObject(memory);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
-
-                Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref memory));
+                scoped ref int reference_ = ref offset.FromRef(memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Memory.Span[1]));
+                reference_ = ref offset.FromRef(ref memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Memory.Span[1]));
+                reference_ = ref offset.FromObjectRef(memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Memory.Span[1]));
             }
 
             Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(IMemoryOwner<int>)!, 0));
@@ -223,9 +256,16 @@ public class RefTests
         {
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(ClassMemoryOwner<int>))));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new ClassMemoryOwner<float>(new float[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new ClassMemoryOwner<float>(new float[0])));
             Assert.Throws<ArgumentException>(() => offset.From(new ClassMemoryOwner<int>(new int[0])));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new ClassMemoryOwner<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(new ClassMemoryOwner<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(new ClassMemoryOwner<int>(new int[0]))));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new ClassMemoryOwner<int>(new int[0])));
         }
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<ClassMemoryOwner<int>, int>(-1));
@@ -262,7 +302,11 @@ public class RefTests
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
                 reference = offset.FromObject(memory);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref memory.Memory.Span[1]));
-                ref int reference_ = ref offset.FromRef(ref memory);
+                scoped ref int reference_ = ref offset.FromRef(memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Memory.Span[1]));
+                reference_ = ref offset.FromRef(ref memory);
+                Assert.True(Unsafe.AreSame(ref reference_, ref memory.Memory.Span[1]));
+                reference_ = ref offset.FromObjectRef(memory);
                 Assert.True(Unsafe.AreSame(ref reference_, ref memory.Memory.Span[1]));
             }
 
@@ -273,9 +317,14 @@ public class RefTests
         foreach (Offset<StructMemoryOwner<int>, int> offset in offsets)
         {
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new StructMemoryOwner<float>(new float[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new StructMemoryOwner<float>(new float[0])));
             Assert.Throws<ArgumentException>(() => offset.From(new StructMemoryOwner<int>(new int[0])));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new StructMemoryOwner<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(new StructMemoryOwner<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(new StructMemoryOwner<int>(new int[0]))));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new StructMemoryOwner<int>(new int[0])));
         }
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new Offset<StructMemoryOwner<int>, int>(-1));
@@ -292,15 +341,15 @@ public class RefTests
             new ArraySegment<int>(new int[10], 2, 3)
         ];
 
-        Offset<ArraySegment<int>, int>[] offsets = new Offset<ArraySegment<int>, int>[]
-        {
-                new(1),
-                new([1]),
-                Offset.ForArraySegmentElement<int>(1),
+        Offset<ArraySegment<int>, int>[] offsets =
+        [
+            new(1),
+            new([1]),
+            Offset.ForArraySegmentElement<int>(1),
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-                new(e => e[1])
+            new(e => e[1])
 #endif
-        };
+        ];
 
         for (int i = 0; i < arraySegments.Length; i++)
         {
@@ -313,7 +362,9 @@ public class RefTests
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref arraySegment.AsSpan()[1]));
                 reference = offset.FromObject(arraySegment);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref arraySegment.AsSpan()[1]));
-                ref int reference_ = ref offset.FromRef(ref arraySegment);
+                ref int reference_ = ref offset.FromRef(arraySegment);
+                Assert.True(Unsafe.AreSame(ref reference_, ref arraySegment.AsSpan()[1]));
+                reference_ = ref offset.FromObjectRef(arraySegment);
                 Assert.True(Unsafe.AreSame(ref reference_, ref arraySegment.AsSpan()[1]));
             }
 
@@ -324,21 +375,19 @@ public class RefTests
         foreach (Offset<ArraySegment<int>, int> offset in offsets)
         {
             Assert.Throws<ArgumentException>(() => offset.From(default));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(default));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(default(ArraySegment<int>)));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(default(ArraySegment<int>)));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(default(ArraySegment<int>))));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
-            Assert.Throws<ArgumentException>(() => offset.FromObject(new ArraySegment<int>()));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new ArraySegment<float>(new float[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new ArraySegment<float>(new float[0])));
             Assert.Throws<ArgumentException>(() => offset.From(new ArraySegment<int>(new int[0])));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new ArraySegment<int>(new int[0])));
-            Assert.Throws<ArgumentException>(() =>
-            {
-                ArraySegment<int> arraySegment_ = new ArraySegment<int>(new int[0]);
-                offset.FromRef(ref arraySegment_);
-            });
-            Assert.Throws<ArgumentException>(() =>
-            {
-                ArraySegment<int> arraySegment_ = default;
-                offset.FromRef(ref arraySegment_);
-            });
+            Assert.Throws<ArgumentException>(() => offset.FromRef(new ArraySegment<int>(new int[0])));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(new ArraySegment<int>(new int[0]))));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new ArraySegment<int>(new int[0])));
         }
 
         Assert.Throws<ArgumentException>(() => new Ref<int>(default(ArraySegment<int>), 0));
@@ -355,81 +404,68 @@ public class RefTests
     [Fact]
     public void NonZeroIndexArray()
     {
-        Array array = Array.CreateInstance(typeof(int), [3], [-1]);
-        array.SetValue(1, 1);
-        Ref<int> reference = new(array, 1);
-        Assert.Equal(1, reference);
+        (Array Array, int[] Indexes, Offset<Array, int>[] Offsets, Func<Array, Ref<int>> RefFactory)[] arrays =
+        [
+            (
+                Array.CreateInstance(typeof(int), [3], [-1]),
+                [1],
+                [new(1)],
+                e => new(e, 1)
+            ),
+            (
+                Array.CreateInstance(typeof(int), [3, 4], [-1, -2]),
+                [0, 1],
+                [new(0, 1)],
+                e => new(e, 0, 1)
+            ),
+            (
+                Array.CreateInstance(typeof(int), [3, 4, 3], [-1, -2, -3]),
+                [0, 1, -1],
+                [new(0, 1, -1)],
+                e => new(e, 0, 1, -1)
+            ),
+            (
+                Array.CreateInstance(typeof(int), [3, 4, 3, 1], [-1, -2, -3, -4]),
+                [0, 1, -1, -4],
+                [new(0, 1, -1, -4)],
+                e => new(e, 0, 1, -1, -4)
+            ),
+        ];
 
-        Offset<Array, int> offset = new(1);
-        reference = offset.From(array);
-        Assert.Equal(1, reference);
-        reference = offset.FromObject(array);
-        Assert.Equal(1, reference);
+        for (int i = 0; i < arrays.Length; i++)
+        {
+            (Array array, int[] indexes, Offset<Array, int>[] offsets, Func<Array, Ref<int>> refFactory) = arrays[i];
+            array.SetValue(1, indexes);
+            Array.Resize(ref offsets, 2);
+            offsets[1] = new(indexes);
 
-        offset = new([1]);
-        reference = offset.From(array);
-        Assert.Equal(1, reference);
-        reference = offset.FromObject(array);
-        Assert.Equal(1, reference);
+            Ref<int> reference = new(array, indexes);
+            Assert.Equal(1, reference);
+            reference = refFactory(array);
+            Assert.Equal(1, reference);
 
-        array = Array.CreateInstance(typeof(int), [3, 4], [-1, -2]);
-        array.SetValue(1, 0, 1);
-        reference = new(array, 0, 1);
-        Assert.Equal(1, reference);
+            foreach (Offset<Array, int> offset in offsets)
+            {
+                reference = offset.From(array);
+                Assert.Equal(1, reference);
+                reference = offset.FromObject(array);
+                Assert.Equal(1, reference);
+                scoped ref int reference_ = ref offset.FromRef(array);
+                Assert.Equal(1, reference_);
+                reference_ = ref offset.FromRef(ref array);
+                Assert.Equal(1, reference_);
+                reference_ = ref offset.FromObjectRef(array);
+                Assert.Equal(1, reference_);
 
-        offset = new(0, 1);
-        reference = offset.From(array);
-        Assert.Equal(1, reference);
-        reference = offset.FromObject(array);
-        Assert.Equal(1, reference);
+                Assert.Throws<ArgumentNullException>(() => offset.From(null!));
+                Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(Array)!)));
+                Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
+            }
+        }
 
-        offset = new([0, 1]);
-        reference = offset.From(array);
-        Assert.Equal(1, reference);
-        reference = offset.FromObject(array);
-        Assert.Equal(1, reference);
-
-        array = Array.CreateInstance(typeof(int), [3, 4, 3], [-1, -2, -3]);
-        array.SetValue(1, 0, 1, -1);
-        reference = new(array, 0, 1, -1);
-        Assert.Equal(1, reference);
-
-        offset = new(0, 1, -1);
-        reference = offset.From(array);
-        Assert.Equal(1, reference);
-        reference = offset.FromObject(array);
-        Assert.Equal(1, reference);
-
-        offset = new([0, 1, -1]);
-        reference = offset.From(array);
-        Assert.Equal(1, reference);
-        reference = offset.FromObject(array);
-        Assert.Equal(1, reference);
-
-        array = Array.CreateInstance(typeof(int), [3, 4, 3, 1], [-1, -2, -3, -4]);
-        array.SetValue(1, 0, 1, -1, -4);
-        reference = new(array, 0, 1, -1, -4);
-        Assert.Equal(1, reference);
-
-        offset = new(0, 1, -1, -4);
-        reference = offset.From(array);
-        Assert.Equal(1, reference);
-        reference = offset.FromObject(array);
-        Assert.Equal(1, reference);
-
-        offset = new([0, 1, -1, -4]);
-        reference = offset.From(array);
-        Assert.Equal(1, reference);
-        reference = offset.FromObject(array);
-        Assert.Equal(1, reference);
-
-        Assert.Throws<ArgumentNullException>(() => offset.From(null!));
-        Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
-        Assert.Throws<ArgumentException>(() => offset.From(Array.CreateInstance(typeof(int), [0], [-1])));
-        Assert.Throws<ArgumentException>(() => offset.From(Array.CreateInstance(typeof(int), [1], [5])));
-        Assert.Throws<ArgumentException>(() => offset.FromObject(Array.CreateInstance(typeof(int), [0], [-1])));
-        Assert.Throws<ArgumentException>(() => offset.FromObject(Array.CreateInstance(typeof(int), [1], [5])));
-        Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref array));
+        // TODO: Are more checks
     }
 
     [Fact]
@@ -451,25 +487,39 @@ public class RefTests
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
             reference = offset.FromObject(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
+            scoped ref int reference_ = ref offset.FromRef(array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2]));
+            reference_ = ref offset.FromRef(ref array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2]));
+            reference_ = ref offset.FromObjectRef(array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2]));
 
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(int[,]))));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new float[0, 0]));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0]));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0]));
             Assert.Throws<ArgumentException>(() => offset.From(new int[0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(new int[0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(new int[0, 0])));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0]));
-            Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref array));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0]));
         }
 
-        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, 0, 0));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(int[,])!, 0, 0));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, -1, 1));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, -1));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, 5, 1));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 5));
         Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3, 3], 1, 1));
 
-        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, [0, 0]));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(int[,])!, [0, 0]));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, [-1, 1]));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, -1]));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, [5, 1]));
@@ -500,18 +550,32 @@ public class RefTests
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
             reference = offset.FromObject(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
+            scoped ref int reference_ = ref offset.FromRef(array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3]));
+            reference_ = ref offset.FromRef(ref array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3]));
+            reference_ = ref offset.FromObjectRef(array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3]));
 
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
-            Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0]));
-            Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0, 0]));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(int[,,]))));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new float[0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0]));
             Assert.Throws<ArgumentException>(() => offset.From(new int[0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(new int[0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(new int[0, 0, 0])));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0]));
-            Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref array));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0, 0]));
         }
 
-        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, 0, 0, 0));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(int[,,])!, 0, 0, 0));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, -1, 1, 1));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, -1, 1));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, -1));
@@ -520,7 +584,7 @@ public class RefTests
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, 5));
         Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3, 3, 3], 1, 1, 1));
 
-        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, [0, 0, 0]));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(int[,,])!, [0, 0, 0]));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, [-1, 1, 1]));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, -1, 1]));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 1, -1]));
@@ -553,18 +617,32 @@ public class RefTests
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
             reference = offset.FromObject(array);
             Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
+            scoped ref int reference_ = ref offset.FromRef(array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3, 4]));
+            reference_ = ref offset.FromRef(ref array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3, 4]));
+            reference_ = ref offset.FromObjectRef(array);
+            Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3, 4]));
 
             Assert.Throws<ArgumentNullException>(() => offset.From(null!));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
-            Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0]));
-            Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0, 0, 0]));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+            Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(int[,,,]))));
+            Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0, 0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new float[0, 0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0, 0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0, 0]));
             Assert.Throws<ArgumentException>(() => offset.From(new int[0, 0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(new int[0, 0, 0, 0]));
+            Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef(new int[0, 0, 0, 0])));
             Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0, 0]));
-            Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref array));
+            Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0, 0, 0]));
         }
 
-        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, 0, 0, 0, 0));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(int[,,,])!, 0, 0, 0, 0));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, -1, 1, 1, 1));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, -1, 1, 1));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, -1, 1));
@@ -575,7 +653,7 @@ public class RefTests
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, 1, 1, 1, 5));
         Assert.Throws<ArrayTypeMismatchException>(() => new Ref<object>(new string[3, 3, 3, 3], 1, 1, 1, 1));
 
-        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default!, [0, 0, 0, 0]));
+        Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(int[,,,])!, [0, 0, 0, 0]));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, [-1, 1, 1, 1]));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, -1, 1, 1]));
         Assert.Throws<ArgumentException>(() => new Ref<int>(array, [1, 1, -1, 1]));
@@ -609,17 +687,25 @@ public class RefTests
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
                 reference = offset.FromObject(array);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1]));
+                scoped ref int reference_ = ref offset.FromRef(array);
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1]));
+                reference_ = ref offset.FromRef(ref Unsafe.AsRef((Array)array));
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1]));
+                reference_ = ref offset.FromObjectRef(array);
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1]));
 
                 Assert.Throws<ArgumentNullException>(() => offset.From(null!));
                 Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(Array)!)));
+                Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
                 Assert.Throws<ArgumentException>(() => offset.From(new int[0, 0]));
                 Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0]));
+                Assert.Throws<ArgumentException>(() => offset.FromRef(new int[0, 0]));
+                Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef((Array)new int[0, 0])));
+                Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0]));
                 Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0]));
-                Assert.Throws<InvalidOperationException>(() =>
-                {
-                    Array array_ = array;
-                    offset.FromRef(ref array_);
-                });
+                Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new float[0]));
             }
 
             Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, 0));
@@ -650,19 +736,25 @@ public class RefTests
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
                 reference = offset.FromObject(array);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2]));
+                scoped ref int reference_ = ref offset.FromRef(array);
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2]));
+                reference_ = ref offset.FromRef(ref Unsafe.AsRef((Array)array));
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2]));
+                reference_ = ref offset.FromObjectRef(array);
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2]));
 
                 Assert.Throws<ArgumentNullException>(() => offset.From(null!));
                 Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
-                Assert.Throws<ArgumentException>(() => offset.From(new int[0]));
-                Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0]));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(Array)!)));
+                Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
                 Assert.Throws<ArgumentException>(() => offset.From(new int[0, 0, 0]));
                 Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0]));
+                Assert.Throws<ArgumentException>(() => offset.FromRef(new int[0, 0, 0]));
+                Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef((Array)new int[0, 0, 0])));
+                Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0, 0]));
                 Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0, 0]));
-                Assert.Throws<InvalidOperationException>(() =>
-                {
-                    Array array_ = array;
-                    offset.FromRef(ref array_);
-                });
+                Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new float[0, 0]));
             }
 
             Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, 0, 0));
@@ -697,19 +789,25 @@ public class RefTests
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
                 reference = offset.FromObject(array);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3]));
+                scoped ref int reference_ = ref offset.FromRef(array);
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3]));
+                reference_ = ref offset.FromRef(ref Unsafe.AsRef((Array)array));
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3]));
+                reference_ = ref offset.FromObjectRef(array);
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3]));
 
                 Assert.Throws<ArgumentNullException>(() => offset.From(null!));
                 Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
-                Assert.Throws<ArgumentException>(() => offset.From(new int[0, 0]));
-                Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0]));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(Array)!)));
+                Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
                 Assert.Throws<ArgumentException>(() => offset.From(new int[0, 0, 0, 0]));
                 Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0, 0]));
+                Assert.Throws<ArgumentException>(() => offset.FromRef(new int[0, 0, 0, 0]));
+                Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef((Array)new int[0, 0, 0, 0])));
+                Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0, 0, 0]));
                 Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0, 0, 0]));
-                Assert.Throws<InvalidOperationException>(() =>
-                {
-                    Array array_ = array;
-                    offset.FromRef(ref array_);
-                });
+                Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new float[0, 0, 0]));
             }
 
             Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, 0, 0, 0));
@@ -748,19 +846,25 @@ public class RefTests
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
                 reference = offset.FromObject(array);
                 Assert.True(Unsafe.AreSame(ref reference.Value, ref array[1, 2, 3, 4]));
+                scoped ref int reference_ = ref offset.FromRef(array);
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3, 4]));
+                reference_ = ref offset.FromRef(ref Unsafe.AsRef((Array)array));
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3, 4]));
+                reference_ = ref offset.FromObjectRef(array);
+                Assert.True(Unsafe.AreSame(ref reference_, ref array[1, 2, 3, 4]));
 
                 Assert.Throws<ArgumentNullException>(() => offset.From(null!));
                 Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
-                Assert.Throws<ArgumentException>(() => offset.From(new int[0, 0, 0]));
-                Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0]));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(null!));
+                Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(Array)!)));
+                Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
                 Assert.Throws<ArgumentException>(() => offset.From(new int[0, 0, 0, 0, 0]));
                 Assert.Throws<ArgumentException>(() => offset.FromObject(new int[0, 0, 0, 0, 0]));
+                Assert.Throws<ArgumentException>(() => offset.FromRef(new int[0, 0, 0, 0, 0]));
+                Assert.Throws<ArgumentException>(() => offset.FromRef(ref Unsafe.AsRef((Array)new int[0, 0, 0, 0, 0])));
+                Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new int[0, 0, 0, 0, 0]));
                 Assert.Throws<ArgumentException>(() => offset.FromObject(new float[0, 0, 0, 0]));
-                Assert.Throws<InvalidOperationException>(() =>
-                {
-                    Array array_ = array;
-                    offset.FromRef(ref array_);
-                });
+                Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new float[0, 0, 0, 0]));
             }
 
             Assert.Throws<ArgumentNullException>(() => new Ref<int>(default(Array)!, 0, 0, 0, 0));
@@ -799,6 +903,12 @@ public class RefTests
         Assert.True(Unsafe.AreSame(ref reference.Value, ref classA.c));
         reference = offset.FromObject(classA);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref classA.c));
+        scoped ref int reference_ = ref offset.FromRef(classA);
+        Assert.True(Unsafe.AreSame(ref reference_, ref classA.c));
+        reference_ = ref offset.FromRef(ref classA);
+        Assert.True(Unsafe.AreSame(ref reference_, ref classA.c));
+        reference_ = ref offset.FromObjectRef(classA);
+        Assert.True(Unsafe.AreSame(ref reference_, ref classA.c));
 
         FieldInfo fieldInfo = typeof(ClassA).GetField("c", BindingFlags.Public | BindingFlags.Instance);
         offset = new(fieldInfo);
@@ -806,6 +916,12 @@ public class RefTests
         Assert.True(Unsafe.AreSame(ref reference.Value, ref classA.c));
         reference = offset.FromObject(classA);
         Assert.True(Unsafe.AreSame(ref reference.Value, ref classA.c));
+        reference_ = ref offset.FromRef(classA);
+        Assert.True(Unsafe.AreSame(ref reference_, ref classA.c));
+        reference_ = ref offset.FromRef(ref classA);
+        Assert.True(Unsafe.AreSame(ref reference_, ref classA.c));
+        reference_ = ref offset.FromObjectRef(classA);
+        Assert.True(Unsafe.AreSame(ref reference_, ref classA.c));
 
         Assert.Throws<ArgumentException>(() => new Offset<ClassA, float>(fieldInfo));
         Assert.Throws<ArgumentException>(() => new Offset<StructA, int>(fieldInfo));
@@ -813,32 +929,48 @@ public class RefTests
 
         Assert.Throws<ArgumentNullException>(() => offset.From(null!));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+        Assert.Throws<ArgumentNullException>(() => offset.FromRef(ref Unsafe.AsRef(default(ClassA))));
+        Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
         Assert.Throws<ArgumentException>(() => offset.FromObject(new object()));
-        Assert.Throws<InvalidOperationException>(() => offset.FromRef(ref classA));
+        Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new object()));
 
-        Offset<ClassA, string?> offset_ = new(e => e.d);
-        Ref<string?> reference_ = offset_.From(classA);
-        Assert.True(Unsafe.AreSame(ref reference_.Value, ref classA.d));
-        reference_ = offset_.FromObject(classA);
-        Assert.True(Unsafe.AreSame(ref reference_.Value, ref classA.d));
+        Offset<ClassA, string?> offsetString = new(e => e.d);
+        Ref<string?> referenceString = offsetString.From(classA);
+        Assert.True(Unsafe.AreSame(ref referenceString.Value, ref classA.d));
+        referenceString = offsetString.FromObject(classA);
+        Assert.True(Unsafe.AreSame(ref referenceString.Value, ref classA.d));
+        scoped ref string? referenceString_ = ref offsetString.FromRef(classA);
+        Assert.True(Unsafe.AreSame(ref referenceString_, ref classA.d));
+        referenceString_ = ref offsetString.FromRef(ref classA);
+        Assert.True(Unsafe.AreSame(ref referenceString_, ref classA.d));
+        referenceString_ = ref offsetString.FromObjectRef(classA);
+        Assert.True(Unsafe.AreSame(ref referenceString_, ref classA.d));
 
         FieldInfo fieldInfo_ = typeof(ClassA).GetField("d", BindingFlags.Public | BindingFlags.Instance);
-        offset_ = new(fieldInfo_);
-        reference_ = offset_.From(classA);
-        Assert.True(Unsafe.AreSame(ref reference_.Value, ref classA.d));
-        reference_ = offset_.FromObject(classA);
-        Assert.True(Unsafe.AreSame(ref reference_.Value, ref classA.d));
+        offsetString = new(fieldInfo_);
+        referenceString = offsetString.From(classA);
+        Assert.True(Unsafe.AreSame(ref referenceString.Value, ref classA.d));
+        referenceString = offsetString.FromObject(classA);
+        Assert.True(Unsafe.AreSame(ref referenceString.Value, ref classA.d));
+        referenceString_ = ref offsetString.FromRef(classA);
+        Assert.True(Unsafe.AreSame(ref referenceString_, ref classA.d));
+        referenceString_ = ref offsetString.FromRef(ref classA);
+        Assert.True(Unsafe.AreSame(ref referenceString_, ref classA.d));
+        referenceString_ = ref offsetString.FromObjectRef(classA);
+        Assert.True(Unsafe.AreSame(ref referenceString_, ref classA.d));
 
-        Assert.Throws<ArgumentNullException>(() => offset_.From(null!));
-        Assert.Throws<ArgumentNullException>(() => offset_.FromObject(null!));
-        Assert.Throws<ArgumentException>(() => offset_.FromObject(new object()));
-        Assert.Throws<InvalidOperationException>(() => offset_.FromRef(ref classA));
+        Assert.Throws<ArgumentNullException>(() => offsetString.From(null!));
+        Assert.Throws<ArgumentNullException>(() => offsetString.FromObject(null!));
+        Assert.Throws<ArgumentNullException>(() => offsetString.FromRef(ref Unsafe.AsRef(default(ClassA))));
+        Assert.Throws<ArgumentNullException>(() => offsetString.FromObjectRef(null!));
+        Assert.Throws<ArgumentException>(() => offsetString.FromObject(new object()));
+        Assert.Throws<ArgumentException>(() => offsetString.FromObjectRef(new object()));
     }
 
     [Fact]
     public void FieldStruct()
     {
-        StructA structA = new StructA() { c = 1 };
+        StructA structA = new() { c = 1 };
         object boxed = structA;
 
         Offset<StructA, int> offset = new(e => e.c);
@@ -847,8 +979,12 @@ public class RefTests
         Assert.True(Unsafe.AreSame(ref reference.Value, ref Unsafe.Unbox<StructA>(boxed).c));
 #endif
         Assert.Equal(1, reference.Value);
-        ref int reference_ = ref offset.FromRef(ref structA);
+        scoped ref int reference_ = ref offset.FromRef(ref structA);
         Assert.True(Unsafe.AreSame(ref reference_, ref structA.c));
+        reference_ = ref offset.FromObjectRef(boxed);
+#if NET5_0_OR_GREATER
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref Unsafe.Unbox<StructA>(boxed).c));
+#endif
 
         FieldInfo fieldInfo = typeof(StructA).GetField("c", BindingFlags.Public | BindingFlags.Instance);
         offset = new(fieldInfo);
@@ -859,14 +995,21 @@ public class RefTests
         Assert.Equal(1, reference.Value);
         reference_ = ref offset.FromRef(ref structA);
         Assert.True(Unsafe.AreSame(ref reference_, ref structA.c));
+        reference_ = ref offset.FromObjectRef(boxed);
+#if NET5_0_OR_GREATER
+        Assert.True(Unsafe.AreSame(ref reference.Value, ref Unsafe.Unbox<StructA>(boxed).c));
+#endif
 
         Assert.Throws<ArgumentException>(() => new Offset<StructA, float>(fieldInfo));
         Assert.Throws<ArgumentException>(() => new Offset<ClassA, int>(fieldInfo));
         Assert.Throws<ArgumentNullException>(() => new Offset<StructA, int>(default(FieldInfo)!));
 
         Assert.Throws<InvalidOperationException>(() => offset.From(default));
+        Assert.Throws<InvalidOperationException>(() => offset.FromRef(structA));
         Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
+        Assert.Throws<ArgumentNullException>(() => offset.FromObjectRef(null!));
         Assert.Throws<ArgumentException>(() => offset.FromObject(new object()));
+        Assert.Throws<ArgumentException>(() => offset.FromObjectRef(new object()));
     }
 
 #if NET8_0_OR_GREATER
@@ -891,8 +1034,11 @@ public class RefTests
             Assert.Equal(1, reference.Value);
             ref int reference_ = ref offset.FromRef(ref valueArray);
             Assert.True(Unsafe.AreSame(ref reference_, ref valueArray[2]));
+            reference_ = ref offset.FromObjectRef(boxedValueArray);
+            Assert.True(Unsafe.AreSame(ref reference.Value, ref Unsafe.Unbox<ValueArray<int>>(boxedValueArray)[2]));
 
             Assert.Throws<InvalidOperationException>(() => offset.From(default));
+            Assert.Throws<InvalidOperationException>(() => offset.FromRef(default));
             Assert.Throws<ArgumentNullException>(() => offset.FromObject(null!));
         }
 

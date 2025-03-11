@@ -258,6 +258,45 @@ internal static partial class Utils
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ref U From<T, U>(ref T reference
+#if !NET5_0_OR_GREATER
+        , [UnscopedRef] out U slot
+#endif
+        )
+        where U : struct
+    {
+        if (typeof(U).IsValueType)
+        {
+            if (typeof(T).IsValueType)
+            {
+                Debug.Assert(typeof(T) == typeof(U));
+#if !NET5_0_OR_GREATER
+                slot = default;
+#endif
+                return ref Unsafe.As<T, U>(ref reference);
+            }
+            else
+            {
+                Debug.Assert(reference is U);
+#if NET5_0_OR_GREATER
+                return ref Unsafe.Unbox<U>((object)reference);
+#else
+                slot = (U)(object)reference;
+                return ref slot;
+#endif
+            }
+        }
+        else
+        {
+            Debug.Assert(reference is U);
+#if !NET5_0_OR_GREATER
+            slot = default;
+#endif
+            return ref Unsafe.As<T, U>(ref reference);
+        }
+    }
+
     public static void ThrowArgumentException_ArrayIndexesOutOfBounds()
         => throw new ArgumentException("Index is outside array's bounds", "indexes");
 
@@ -373,9 +412,6 @@ internal static partial class Utils
     public static void ThrowInvalidOperationException_InvalidTOwnerTypeValueTypeRestrictions()
         => throw new InvalidOperationException("TOwner generic parameter must be a reference type, unless this offset is accessing an element index from Memory<TReference>, an ArraySegment<TReference> or from a type assignable to IMemoryOwner<TReference>.");
 
-    public static void ThrowInvalidOperationException_InvalidTReferenceTypeOnlyValueTypes()
-        => throw new InvalidOperationException("TRefence generic parameter must be a value type.");
-
     public static void ThrowInvalidOperationException_OnlyArrayOrIMemoryOwner()
         => throw new InvalidOperationException("TOwner generic parameter is not an array whose element type is TReference, a Memory<TReference>, an ArraySegment<TReference>, a type assignable to IMemoryOwner<TReference> or a type with the attribute InlineArrayAttribute.");
 
@@ -425,19 +461,33 @@ internal static class UnboxerHelper<TArray>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ref TArray Unbox(object obj)
+    {
+        Debug.Assert(typeof(TArray).IsDefined(typeof(InlineArrayAttribute)));
+        return ref Impl.Unbox(obj);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ReferenceProvider<TReference> GetElementAccessor<TReference>()
     {
         Debug.Assert(typeof(TArray).IsDefined(typeof(InlineArrayAttribute)));
-        return new ReferenceProvider<TReference>(Work);
+        return Container<TReference>.ReferenceProvider;
+    }
 
-        static ref TReference Work(object? owner, nint index)
+    private static class Container<TReference>
+    {
+        public static readonly ReferenceProvider<TReference> ReferenceProvider = (object? managedState, nint unmanagedState) =>
         {
-            Debug.Assert(owner is not null);
+            Debug.Assert(managedState is not null);
+            Debug.Assert(managedState is TArray);
             Debug.Assert(typeof(TArray).IsDefined(typeof(InlineArrayAttribute)));
-            Debug.Assert(index < typeof(TArray).GetCustomAttribute<InlineArrayAttribute>()!.Length);
-            ref TArray array = ref UnboxerHelper<TArray>.Impl.Unbox(owner);
-            return ref Unsafe.Add(ref Unsafe.As<TArray, TReference>(ref array), (int)index);
-        }
+            Debug.Assert(unmanagedState < typeof(TArray).GetCustomAttribute<InlineArrayAttribute>()!.Length);
+#pragma warning disable IL2090 // 'this' argument does not satisfy 'DynamicallyAccessedMembersAttribute' in call to target method. The generic parameter of the source method or type does not have matching annotations.
+            // Field can't be removed by IL trimmer.
+            Debug.Assert(typeof(TArray).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)[0].FieldType == typeof(TReference));
+#pragma warning restore IL2090 // 'this' argument does not satisfy 'DynamicallyAccessedMembersAttribute' in call to target method. The generic parameter of the source method or type does not have matching annotations.
+            return ref Unsafe.Add(ref Unsafe.As<TArray, TReference>(ref UnboxerHelper<TArray>.Unbox(managedState)), (int)unmanagedState);
+        };
     }
 }
 
