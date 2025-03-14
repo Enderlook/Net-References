@@ -11,23 +11,23 @@ public readonly struct Ref<T>
 {
     /// Get reference to the value.
     public readonly unsafe ref T Value { get; }
-		
+        
     /// Creates an reference from a pointer.
     public unsafe Ref(T* pointer);    
 
     /// Creates a reference to an element of the collection.
-	public Ref(IMemoryOwner<T> memoryManager, int index);
+    public Ref(IMemoryOwner<T> memoryManager, int index);
     public Ref(T[] array, int index);
-	public Ref(T[,] array, int index1, int index2);
-	public Ref(T[,,] array, int index1, int index2, int index3);
-	public Ref(T[,,,] array, int index1, int index2, int index3, int index4);
-	public unsafe Ref(Array array, params ReadOnlySpan<int> indexes);
+    public Ref(T[,] array, int index1, int index2);
+    public Ref(T[,,] array, int index1, int index2, int index3);
+    public Ref(T[,,,] array, int index1, int index2, int index3, int index4);
+    public unsafe Ref(Array array, params ReadOnlySpan<int> indexes);
     public Ref(Memory<T> memory, int index);
-	public Ref(ArraySegment<T> segment, int index);
-	
-	// Creates a wrapper around a method which returns a reference.
-	public Ref(object managedState, nint unmanagedState, ReferenceProvider<T> referenceProvider);
-		
+    public Ref(ArraySegment<T> segment, int index);
+    
+    // Creates a wrapper around a method which returns a reference.
+    public Ref(object managedState, nint unmanagedState, ReferenceProvider<T> referenceProvider);
+        
     /// Reads the inner reference.
     public static implicit operator T(Ref<T> self);
 
@@ -39,24 +39,30 @@ public readonly struct Ref<T>
 public sealed class Offset<TOwner, TReference>
 {
     /// Creates an offset for an element array or field.
-	/// The expression can be an array (including multidimensional or non zero-based) index access, array segment index access, field access of any reference type.
+    /// The expression can be an array (including multidimensional or non zero-based) index access, array segment index access, field access of any reference type.
     public Offset(Expression<Func<TOwner, TReference>> expression);
-	
-	/// Create an offset to an specific field.
+    
+    /// Create an offset to an specific field.
     public Offset(FieldInfo fieldInfo);
-		
+        
     /// Creates an offset to an specific index of an array (including multidimensional or non zero-based), array segment, memory or memory manager.
     public Offset(int index);
     public Offset(params ReadOnlySpan<int> indexes);
-	
+    
     /// Creates an inner reference for the specified owner.
     public Ref<TReference> From(TOwner owner);
-	
-	/// Creates an inner reference for the specified owner, supports boxed value types.
+    
+    /// Creates an inner reference for the specified owner, supports boxed value types.
     public Ref<TReference> FromObject(object owner);
+    
+    /// Creates an inner reference for the specified owner.
+    public unsafe ref TReference FromRef(ref TOwner owner);
 	
-    /// Creates an inner reference for the specified owner, only valid for value types.
-	public unsafe ref TReference FromRef(ref TOwner owner);
+    /// Creates an inner reference for the specified owner, not supported for fields of value types or element index of inline arrays.
+    public unsafe ref TReference FromRef(TOwner owner);
+	
+    /// Creates an inner reference for the specified owner, supports boxed value types.
+    public ref TReference FromObjectRef(object owner);
 }
 
 /// Helper methods for Offset<TOwner, TReference>.
