@@ -388,9 +388,6 @@ public readonly struct Ref<T>
         _managed = managed;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static Ref<T> CreateUnsafe(object? owner, nint unmanaged, object? managed) => new(owner, unmanaged, managed);
-
     /// <summary>
     /// Reads the reference.
     /// </summary>

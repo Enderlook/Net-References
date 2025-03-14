@@ -553,7 +553,9 @@ public sealed class Offset<TOwner, TReference>
                     FromField(owner, Unsafe.As<FieldInfo>(_payload));
                     _referenceCached = true;
                 }
-                return Ref<TReference>.CreateUnsafe(owner, default, _referencePayload);
+                Debug.Assert(_referencePayload is not null);
+                // Cast is required to use correct overload.
+                return new(owner, default, (object)_referencePayload);
             }
             case Mode.SingleZeroArray:
             {
@@ -564,7 +566,8 @@ public sealed class Offset<TOwner, TReference>
                 int index = _index;
                 if (index >= array.Length)
                     Utils.ThrowArgumentException_OwnerLengthMustBeGreaterThanIndex();
-                return Ref<TReference>.CreateUnsafe(owner, index, default);
+                // `default(object)` is required to use correct overload.
+                return new(owner, index, default(object));
             }
             case Mode.ArraySegment:
             {
@@ -580,7 +583,8 @@ public sealed class Offset<TOwner, TReference>
                 int index = _index;
                 if (index >= arraySegment.Count)
                     Utils.ThrowArgumentException_OwnerCountMustBeGreaterThanIndex();
-                return Ref<TReference>.CreateUnsafe(arraySegment.Array, index + arraySegment.Offset, default);
+                // `default(object)` is required to use correct overload.
+                return new(arraySegment.Array, index + arraySegment.Offset, default(object));
             }
             case Mode.Memory:
             {
@@ -593,12 +597,26 @@ public sealed class Offset<TOwner, TReference>
                 int index = _index;
                 if (index >= memory.Length)
                     Utils.ThrowArgumentException_IndexMustBeLowerThanMemoryLength();
+                object a;
+                int i;
                 // Try to avoid boxing the `Memory<T>`.
                 if (MemoryMarshal.TryGetArray(memory, out ArraySegment<TReference> segment))
-                    return Ref<TReference>.CreateUnsafe(segment.Array, segment.Offset + index, default);
-                if (MemoryMarshal.TryGetMemoryManager<TReference, MemoryManager<TReference>>(memory, out MemoryManager<TReference>? manager, out int start, out _))
-                    return Ref<TReference>.CreateUnsafe(manager, (start + index) | int.MinValue, default);
-                return Ref<TReference>.CreateUnsafe(typeof(T).IsValueType ? memory : owner, index | int.MinValue, default);
+                {
+                    a = segment.Array;
+                    i = segment.Offset + index;
+                }
+                else if (MemoryMarshal.TryGetMemoryManager<TReference, MemoryManager<TReference>>(memory, out MemoryManager<TReference>? manager, out int start, out _))
+                {
+                    a = manager;
+                    i = (start + index) | int.MinValue;
+                }
+                else
+                {
+                    a = typeof(T).IsValueType ? memory : owner;
+                    i = index | int.MinValue;
+                }
+                // `default(object)` is required to use correct overload.
+                return new(a, i, default(object));
             }
             case Mode.IMemoryOwner:
             {
@@ -606,7 +624,8 @@ public sealed class Offset<TOwner, TReference>
                 int index = _index;
                 if (index >= (typeof(T).IsValueType ? ((IMemoryOwner<TReference>)owner).Memory : Unsafe.As<IMemoryOwner<TReference>>(owner).Memory).Length)
                     Utils.ThrowArgumentException_OwnerSpanLengthMustBeGreaterThanIndex();
-                return Ref<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
+                // `default(object)` is required to use correct overload.
+                return new(owner, index | int.MinValue, default(object));
             }
             case Mode.MemoryManager:
             {
@@ -614,7 +633,8 @@ public sealed class Offset<TOwner, TReference>
                 int index = _index;
                 if (index >= Unsafe.As<MemoryManager<TReference>>(owner).GetSpan().Length)
                     Utils.ThrowArgumentException_OwnerSpanLengthMustBeGreaterThanIndex();
-                return Ref<TReference>.CreateUnsafe(owner, index | int.MinValue, default);
+                // `default(object)` is required to use correct overload.
+                return new(owner, index | int.MinValue, default(object));
             }
 #if NET8_0_OR_GREATER
             case Mode.InlineArray:
@@ -626,7 +646,8 @@ public sealed class Offset<TOwner, TReference>
                     _referencePayload = UnboxerHelper<TOwner>.GetElementAccessor<TReference>();
                     _referenceCached = true;
                 }
-                return Ref<TReference>.CreateUnsafe(owner, _index, _referencePayload);
+                // Cast is required to use correct overload.
+                return new(owner, _index, (object)_referencePayload);
             }
 #endif
             case Mode.SingleArray:
@@ -904,9 +925,11 @@ public sealed class Offset<TOwner, TReference>
         if (index < lowerBound || index > array.GetUpperBound(0))
             Utils.ThrowArgumentException_OwnerIndexOutOfBounds();
 #if NET6_0_OR_GREATER
-        return Ref<TReference>.CreateUnsafe(owner, index - lowerBound, default);
+                // `default(object)` is required to use correct overload.
+        return new(owner, index - lowerBound, default(object));
 #else
-        return Ref<TReference>.CreateUnsafe(owner, index, default);
+        // `default(object)` is required to use correct overload.
+        return new(owner, index, default(object));
 #endif
     }
 
@@ -937,10 +960,12 @@ public sealed class Offset<TOwner, TReference>
         Array array = Unsafe.As<Array>(owner);
 #if NET6_0_OR_GREATER
         int index = Utils.CalculateIndex(array, indexes);
-        return Ref<TReference>.CreateUnsafe(owner, index, default);
+        // `default(object)` is required to use correct overload.
+        return new(owner, index, default(object));
 #else
         Utils.CheckBounds(array, indexes);
-        return Ref<TReference>.CreateUnsafe(owner, default, indexes);
+        // Cast is required to use correct overload.
+        return new(owner, default, (object)indexes);
 #endif
     }
 
