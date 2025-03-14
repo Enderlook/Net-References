@@ -550,7 +550,7 @@ public sealed class Offset<TOwner, TReference>
                 if (!_referenceCached)
                 {
                     Debug.Assert(_payload is FieldInfo);
-                    FromField(owner, Unsafe.As<FieldInfo>(_payload));
+                    FromFieldReferenceType(owner, Unsafe.As<FieldInfo>(_payload));
                     _referenceCached = true;
                 }
                 Debug.Assert(_referencePayload is not null);
@@ -695,7 +695,7 @@ public sealed class Offset<TOwner, TReference>
                     if (!_valueCached)
                     {
                         Debug.Assert(_payload is FieldInfo);
-                        FromFieldValue(Unsafe.As<FieldInfo>(_payload));
+                        FromFieldValueType(Unsafe.As<FieldInfo>(_payload));
                         _valueCached = true;
                     }
                     Debug.Assert(_valuePayload is not null);
@@ -706,7 +706,7 @@ public sealed class Offset<TOwner, TReference>
                     if (!_referenceCached)
                     {
                         Debug.Assert(_payload is FieldInfo);
-                        FromField(owner, Unsafe.As<FieldInfo>(_payload));
+                        FromFieldReferenceType(owner, Unsafe.As<FieldInfo>(_payload));
                         _referenceCached = true;
                     }
                     object? payload = _referencePayload;
@@ -834,7 +834,7 @@ public sealed class Offset<TOwner, TReference>
 #if NET5_0_OR_GREATER
     [DynamicDependency("As", typeof(Unsafe))]
 #endif
-    private void FromField<T>(T owner, FieldInfo fieldInfo)
+    private void FromFieldReferenceType<T>(T owner, FieldInfo fieldInfo)
     {
         Debug.Assert(owner is not null);
 #if !NET10_0_OR_GREATER
@@ -843,6 +843,7 @@ public sealed class Offset<TOwner, TReference>
         {
             try
             {
+                Debug.Assert(!typeof(T).IsValueType);
                 object boxed = owner;
                 Debug.Assert(boxed is not null);
                 FieldInfo[] array = [fieldInfo];
@@ -891,7 +892,7 @@ public sealed class Offset<TOwner, TReference>
         Utils.ThrowNotImplementedException();
     }
 
-    private void FromFieldValue(FieldInfo fieldInfo)
+    private void FromFieldValueType(FieldInfo fieldInfo)
     {
         Debug.Assert(typeof(TOwner).IsValueType);
 
